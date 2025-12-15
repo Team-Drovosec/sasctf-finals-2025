@@ -28,7 +28,7 @@ stmt = select(Girl).where(Girl.girl_id == invoke_data.girl_id)
 ```
 As you can see, `girl_id` is taken directly from `invoke_data`. To exploit this, start a chat with your own girlfriend, then send a follow-up request while keeping the same `session_id` but replacing `girl_id` with the target girl's ID.
 
-To fix the vulnerability, that line to:
+To fix the vulnerability, change that line to:
 ```py
 stmt = select(Girl).where(Girl.girl_id == session.girl_id)
 ```
