@@ -1,0 +1,11 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+ENTRY_POINT_ATTR void start(void) {
+    __asm__ volatile (
+        ".byte 0x0F, 0x0B"
+    );
+    ENTRY_POINT_END();
+}

@@ -1,0 +1,26 @@
+{
+  "name": "checker",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@types/user-agents": "^1.0.4",
+    "minecraft-data": "^3.99.1",
+    "mineflayer": "^4.33.0",
+    "mineflayer-pathfinder": "^2.4.5",
+    "totp-generator": "^2.0.0",
+    "user-agents": "^1.1.669",
+    "uuid": "^13.0.0",
+    "zod": "^4.1.12"
+  },
+  "patchedDependencies": {
+    "minecraft-protocol@1.62.0": "patches/minecraft-protocol@1.62.0.patch",
+    "yggdrasil@1.7.0": "patches/yggdrasil@1.7.0.patch"
+  }
+}

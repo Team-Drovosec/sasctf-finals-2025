@@ -1,0 +1,31 @@
+services:
+    db:
+        image: postgres:16
+        restart: always
+        volumes:
+            - ./data/db:/var/lib/postgresql/data
+        environment:
+            - POSTGRES_DB=chess
+            - POSTGRES_USER=root
+            - POSTGRES_PASSWORD=chessforever
+    migrations:
+        image: ghcr.io/kukymbr/goose-docker:3.26.0
+        volumes:
+            - ./migrations:/migrations
+        working_dir: /migrations
+        depends_on:
+            - db
+        environment:
+            - GOOSE_DRIVER=postgres
+            - GOOSE_DBSTRING=postgres://root:chessforever@db:5432/chess?sslmode=disable
+        # command: "goose up"
+        restart: on-failure
+    app:
+        build: .
+        ports:
+            - 4000:4000
+        volumes:
+            - ./templates:/templates
+        restart: always
+        depends_on:
+            - db

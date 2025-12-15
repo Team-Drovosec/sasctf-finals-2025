@@ -1,0 +1,26 @@
+diff --git a/src/client.js b/src/client.js
+index e369e77d055ba919e8f9da7b8e8b5dc879c74cf4..cb07d2ffe150c7c94cc160355e60b3c0c69a1575 100644
+--- a/src/client.js
++++ b/src/client.js
+@@ -11,7 +11,7 @@ const createDeserializer = require('./transforms/serializer').createDeserializer
+ const createCipher = require('./transforms/encryption').createCipher
+ const createDecipher = require('./transforms/encryption').createDecipher
+ 
+-const closeTimeout = 30 * 1000
++const closeTimeout = 10 * 1000
+ 
+ class Client extends EventEmitter {
+   constructor (isServer, version, customPackets, hideErrors = false) {
+diff --git a/src/createClient.js b/src/createClient.js
+index 912e331e6dfbc91d0858e678eb6f015cebd07403..3d43cac58bfbb1334c3bd8d745e809d9c676d93c 100644
+--- a/src/createClient.js
++++ b/src/createClient.js
+@@ -43,7 +43,7 @@ function createClient (options) {
+   } else {
+     switch (options.auth) {
+       case 'mojang':
+-        console.warn('[deprecated] mojang auth servers no longer accept mojang accounts to login. convert your account.\nhttps://help.minecraft.net/hc/en-us/articles/4403181904525-How-to-Migrate-Your-Mojang-Account-to-a-Microsoft-Account')
++        // console.warn('[deprecated] mojang auth servers no longer accept mojang accounts to login. convert your account.\nhttps://help.minecraft.net/hc/en-us/articles/4403181904525-How-to-Migrate-Your-Mojang-Account-to-a-Microsoft-Account')
+         auth(client, options)
+         onReady()
+         break

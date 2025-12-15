@@ -1,0 +1,79 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+static inline void fill_buffers(uint8_t *a, uint8_t *b, uint32_t size, uint32_t seed) {
+#pragma unroll
+    for (uint32_t i = 0; i < size; ++i) {
+        a[i] = (uint8_t)((i + seed) & 0xFF);
+        b[i] = (uint8_t)(((i * 3) + (seed & 0xF)) & 0xFF);
+    }
+}
+
+static inline uint64_t combine_xor_symbolic(uint8_t *a, uint8_t *b, uint8_t *out, uint32_t size) {
+    memcpy(out, a, size);
+    memxor(out, b, size);
+
+    uint64_t sym_val = TRUSTED_CALL(create_file_plain, out, (uint32_t)size);
+
+    if ((sym_val & (uint64_t)(size + 1)) != 0) {
+#pragma unroll
+        for (uint32_t i = 0; i < size; ++i)
+            out[i] ^= (uint8_t)((sym_val + i) & 0xFF);
+    } else {
+#pragma unroll
+        for (uint32_t i = 0; i < size; ++i)
+            out[i] ^= (uint8_t)((sym_val - i) & 0xFF);
+    }
+
+    uint64_t acc = 0;
+#pragma unroll
+    for (uint32_t i = 0; i < size; ++i)
+        acc += out[i];
+    return acc ^ sym_val;
+}
+
+static inline uint64_t compare_and_encode_symbolic(uint8_t *a, uint8_t *b, uint32_t size) {
+    int cmpv = memcmp(a, b, size);
+    memset(a, (uint8_t)cmpv, size);
+
+    uint64_t dummy_handle = TRUSTED_CALL(create_file_enc, a, size, (uint32_t*)b, (uint32_t*)a);
+
+    if ((dummy_handle ^ cmpv) & 1ULL) {
+        memxor(a, b, size);
+    } else {
+        memcpy(a, b, size);
+    }
+
+    char tmp_hex[2 * 16 + 1];
+    hex_encode(a, 16, tmp_hex, 0);
+
+    uint64_t acc = 0;
+#pragma unroll
+    for (int i = 0; i < 16; ++i)
+        acc += (uint8_t)tmp_hex[i];
+
+    return acc + dummy_handle;
+}
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t a[{{ FILE_SIZE }}];
+    uint8_t b[{{ FILE_SIZE }}];
+    uint8_t out[{{ FILE_SIZE }}];
+
+    fill_buffers(a, b, {{ FILE_SIZE }}, {{ seed }});
+
+{% if seed % 2 == 0 %}
+    uint64_t s1 = combine_xor_symbolic(a, b, out, {{ FILE_SIZE }});
+    uint64_t s2 = compare_and_encode_symbolic(a, b, {{ FILE_SIZE }});
+{% else %}
+    uint64_t s2 = compare_and_encode_symbolic(a, b, {{ FILE_SIZE }});
+    uint64_t s1 = combine_xor_symbolic(a, b, out, {{ FILE_SIZE }});
+{% endif %}
+
+    volatile uint64_t final_val = s1 + s2;
+    (void)final_val;
+
+    ENTRY_POINT_END();
+}

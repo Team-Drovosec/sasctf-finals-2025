@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChessHub - Home</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        chess: {
+                            light: '#f0d9b5',
+                            dark: '#b58863',
+                            primary: '#2563eb',
+                            secondary: '#1e40af'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        {{template "header" .}}
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-1 space-y-6">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                    <h2 class="text-xl font-semibold mb-3 dark:text-white">Open Lobbies</h2>
+                    <div id="lobby-list" class="space-y-2 max-h-64 overflow-y-auto">
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                    <h2 class="text-xl font-semibold mb-3 dark:text-white">Challenges</h2>
+                    <div id="challenges-list" class="space-y-2 max-h-64 overflow-y-auto">
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                    <h2 class="text-2xl font-semibold mb-6 text-center dark:text-white">Start a New Game</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="border dark:border-gray-700 rounded-lg p-4">
+                            <h3 class="font-semibold mb-3 dark:text-gray-200">Challenge a Specific Player</h3>
+                            <div class="mb-3">
+                                <label class="block text-sm font-medium mb-2 dark:text-gray-400">Opponent Username:</label>
+                                <input type="text" id="opponent-input" class="w-full border rounded px-3 py-2 bg-white dark:bg-gray-700 dark:border-gray-600 dark:text-white dark:placeholder-gray-400" placeholder="Enter username">
+                            </div>
+                            <button id="challenge-btn" class="w-full bg-chess-primary hover:bg-chess-secondary text-white px-4 py-2 rounded">
+                                Send Challenge
+                            </button>
+                        </div>
+
+                        <div class="border dark:border-gray-700 rounded-lg p-4 flex flex-col">
+                            <h3 class="font-semibold mb-3 dark:text-gray-200">Create Open Lobby</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">Anyone can join your game</p>
+                            <div class="flex-grow"></div>
+                            <button id="create-lobby-btn" class="w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded">
+                                Create Open Lobby
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const lobbyList = document.getElementById('lobby-list');
+        const challengesList = document.getElementById('challenges-list');
+        const opponentInput = document.getElementById('opponent-input');
+        const challengeBtn = document.getElementById('challenge-btn');
+        const createLobbyBtn = document.getElementById('create-lobby-btn');
+
+        function init() {
+            fetchData();
+            setupEventListeners();
+            setInterval(fetchData, 3000);
+        }
+
+        function setupEventListeners() {
+            challengeBtn.addEventListener('click', sendChallenge);
+            createLobbyBtn.addEventListener('click', createOpenLobby);
+        }
+
+        async function sendChallenge() {
+            const opponent = opponentInput.value.trim();
+
+            if (!opponent) {
+                alert('Please enter an opponent username');
+                return;
+            }
+            try {
+                const response = await fetch('/invite', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ To: opponent })
+                });
+
+                if (response.ok) {
+                    opponentInput.value = '';
+                    fetchData();
+                } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    alert(errorData.message || 'Failed to send challenge');
+                }
+            } catch (error) {
+                console.error('Challenge error:', error);
+                alert('Failed to send challenge');
+            }
+        }
+
+        async function createOpenLobby() {
+            try {
+                const response = await fetch('/open-invite-create', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                });
+                if (response.ok) {
+                    fetchData();
+                } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    alert('Error: ' + (errorData.message || 'Failed to create lobby'));
+                }
+            } catch (error) {
+                console.error('Lobby creation error:', error);
+                alert('Failed to connect to server');
+            }
+        }
+
+        async function fetchData() {
+            try {
+                const [invitesResponse, openLobbiesResponse] = await Promise.all([
+                    fetch('/invites'),
+                    fetch('/open-invites')
+                ]);
+
+                const invites = invitesResponse.ok ? await invitesResponse.json() : [];
+                const openLobbies = openLobbiesResponse.ok ? await openLobbiesResponse.json() : [];
+
+                renderChallengesList(invites);
+                renderLobbyList(openLobbies);
+            } catch (error) {
+                console.error('Failed to fetch data:', error);
+            }
+        }
+
+        async function acceptInvite(fromObject) {
+            try {
+                const response = await fetch('/invite-accept', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ From: getPlayerAPIName(fromObject) })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    alert(errorData.message || 'Failed to accept challenge');
+                }
+
+                window.location = "/game?id="+(await response.text()).slice(1, -1);
+            } catch (error) {
+                console.error('Accept invite error:', error);
+                alert('Failed to accept challenge');
+            }
+        }
+        
+        async function declineInvite(fromObject) {
+            try {
+                const response = await fetch('/invite-decline', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ From: getPlayerAPIName(fromObject) })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    alert(errorData.message || 'Failed to decline challenge');
+                }
+                fetchData();
+            } catch (error) {
+                console.error('Decline invite error:', error);
+                alert('Failed to decline challenge');
+            }
+        }
+
+        async function acceptOpenInvite(fromObject) {
+            try {
+                const response = await fetch('/open-invite-accept', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ From: getPlayerAPIName(fromObject) })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    alert(errorData.message || 'Failed to join lobby');
+                }
+                
+                window.location = "/game?id="+(await response.text()).slice(1, -1);
+            } catch (error) {
+                console.error('Accept open invite error:', error);
+                alert('Failed to join lobby');
+            }
+        }
+        
+        function getPlayerDisplayName(player) {
+            if (player && player.Username) {
+                return { displayName: player.Username, isGuest: false };
+            }
+            if (player && player.AnonymousID) {
+                return { displayName: `Guest-${player.AnonymousID}`, isGuest: true };
+            }
+            return { displayName: 'Unknown Player', isGuest: true };
+        }
+
+        function getPlayerAPIName(player) {
+            if (player && player.Username) {
+                return player.Username;
+            }
+            if (player && player.AnonymousID) {
+                return `anon:${player.AnonymousID}`;
+            }
+            return "";
+        }
+
+        function renderLobbyList(lobbies) {
+            lobbyList.innerHTML = '';
+            if (!lobbies || lobbies.length === 0) {
+                lobbyList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm">No open lobbies found</p>';
+                return;
+            }
+
+            lobbies.forEach(lobby => {
+                const { displayName, isGuest } = getPlayerDisplayName(lobby.From);
+                const lobbyDiv = document.createElement('div');
+                lobbyDiv.className = 'flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded';
+                lobbyDiv.innerHTML = `
+                    <div class="space-y-1">
+                        <span class="text-sm font-medium dark:text-gray-300">
+                            ${isGuest ? '<i class="fas fa-user-secret text-gray-500 dark:text-gray-400 mr-2" title="Guest Player"></i>' : ''}
+                            ${displayName}
+                        </span>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Created: ${new Date(lobby.CreatedAt).toLocaleTimeString()}</p>
+                    </div>
+                    <button class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm join-btn" 
+                            data-host='${JSON.stringify(lobby.From)}'>
+                        Join
+                    </button>
+                `;
+                lobbyList.appendChild(lobbyDiv);
+            });
+
+            document.querySelectorAll('.join-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => acceptOpenInvite(JSON.parse(e.currentTarget.dataset.host)));
+            });
+        }
+
+        function renderChallengesList(invites) {
+            challengesList.innerHTML = '';
+            const pendingInvites = invites;
+
+            if (!pendingInvites || pendingInvites.length === 0) {
+                challengesList.innerHTML = '<p class="text-gray-500 dark:text-gray-400 text-sm">No pending challenges</p>';
+                return;
+            }
+
+            pendingInvites.forEach(invite => {
+                const { displayName, isGuest } = getPlayerDisplayName(invite.From);
+                const challengeDiv = document.createElement('div');
+                challengeDiv.className = 'flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded';
+                challengeDiv.innerHTML = `
+                    <span class="dark:text-gray-300">From: 
+                        ${isGuest ? '<i class="fas fa-user-secret text-gray-500 dark:text-gray-400 mr-1" title="Guest Player"></i>' : ''}
+                        ${displayName}
+                    </span>
+                    <div>
+                        <button class="bg-green-500 hover:bg-green-600 text-white px-2 py-1 rounded text-xs accept-btn mr-1" data-from='${JSON.stringify(invite.From)}'>
+                            Accept
+                        </button>
+                        <button class="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs decline-btn" data-from='${JSON.stringify(invite.From)}'>
+                            Decline
+                        </button>
+                    </div>
+                `;
+                challengesList.appendChild(challengeDiv);
+            });
+
+            document.querySelectorAll('.accept-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => acceptInvite(JSON.parse(e.currentTarget.dataset.from)));
+            });
+            
+            document.querySelectorAll('.decline-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => declineInvite(JSON.parse(e.currentTarget.dataset.from)));
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+diff --git a/src/utils.js b/src/utils.js
+index afc2e17e09ee1146a59b0c5674703486ea341311..11a2b46ba110c0118814b650c85c43414b92b5a2 100644
+--- a/src/utils.js
++++ b/src/utils.js
+@@ -3,7 +3,7 @@ const nf = require('node-fetch')
+ const { version } = require('../package.json'); // eslint-disable-line
+ 
+ const headers = {
+-  'User-Agent': `node-yggdrasil/${version}`,
++  'User-Agent': "Java/21.0.8",
+   'Content-Type': 'application/json'
+ }
+ 

@@ -1,0 +1,104 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t buf_plain[{{ FILE_SIZE }}];
+    uint8_t iv[12];
+    uint8_t tag[16];
+
+    for (uint32_t i = 0; i < {{ FILE_SIZE }}; ++i)
+        buf_plain[i] = (uint8_t)(i & 0xFF);
+    for (uint32_t i = 0; i < 12; ++i)
+        iv[i] = (uint8_t)(0xA5 + i);
+    for (uint32_t i = 0; i < 16; ++i)
+        tag[i] = 0;
+
+    uint64_t handles_plain[{{ COUNT_PLAIN }}];
+    uint64_t handles_enc[{{ COUNT_ENC }}];
+    uint64_t acc_h = 0, acc_r = 0, acc_l = 0;
+
+{% if FORMAT_CASE == 0 %}
+    char fmt_handle[5] = {'%','l','l','x',0};
+    char fmt_ret[3] = {'%','d',0};
+{% else %}
+    char fmt_handle[3] = {'%','d',0};
+    char fmt_ret[5] = {'%','l','l','x',0};
+{% endif %}
+
+    /* Plain files */
+#pragma unroll
+    for (int i = 0; i < {{ COUNT_PLAIN }}; ++i) {
+        uint64_t h = TRUSTED_CALL(create_file_plain, buf_plain, (uint32_t){{ FILE_SIZE }});
+        handles_plain[i] = h;
+        acc_h += h;
+    }
+
+    /* Encrypted files */
+#pragma unroll
+    for (int j = 0; j < {{ COUNT_ENC }}; ++j) {
+        uint64_t h = TRUSTED_CALL(create_file_enc, buf_plain, (uint32_t){{ FILE_SIZE }}, (uint32_t*)iv, (uint32_t*)tag);
+        handles_enc[j] = h;
+        acc_h += h;
+    }
+
+    /* Read files */
+#pragma unroll
+    for (int p = 0; p < {{ COUNT_PLAIN }}; ++p) {
+        uint8_t outbuf[{{ FILE_SIZE }}];
+        uint32_t outlen = {{ FILE_SIZE }};
+        int32_t r = TRUSTED_CALL(read_file_plain, handles_plain[p], outbuf, &outlen);
+        acc_r += (uint64_t)r;
+        acc_l += (uint64_t)outlen;
+    }
+
+#pragma unroll
+    for (int q = 0; q < {{ COUNT_ENC }}; ++q) {
+        uint8_t outbuf[{{ FILE_SIZE }}];
+        uint32_t outlen = {{ FILE_SIZE }};
+        int32_t r = TRUSTED_CALL(read_file_enc, handles_enc[q], (uint32_t*)tag, outbuf, &outlen);
+        acc_r += (uint64_t)r;
+        acc_l += (uint64_t)outlen;
+    }
+
+    /*************************************************************************/
+{% if TAINT_KIND == 0 %}
+    uint8_t tainted_buf[{{ TAINT_SIZE }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < sizeof(tainted_buf); ++t) {
+        tainted_acc += tainted_buf[t];
+    }
+{% elif TAINT_KIND == 1 %}
+    uint32_t tainted_buf32[{{ TAINT_SIZE_WORDS }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < {{ TAINT_SIZE_WORDS }}; ++t) {
+        tainted_acc += (uint64_t)tainted_buf32[t];
+    }
+{% else %}
+    uint64_t tainted_buf64[{{ TAINT_SIZE_QWORDS }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < {{ TAINT_SIZE_QWORDS }}; ++t) {
+        tainted_acc += tainted_buf64[t];
+    }
+{% endif %}
+    acc_r += tainted_acc;
+    /*************************************************************************/
+
+    uint8_t tmp[16];
+    for (int i = 0; i < 16; ++i)
+        tmp[i] = (uint8_t)(iv[i % 12] ^ tag[i]);
+
+    uint64_t checksum = 0;
+    for (int i = 0; i < 16; ++i)
+        checksum += tmp[i];
+
+    TRUSTED_CALL_VOID(mini_printf, fmt_ret, acc_h);
+    TRUSTED_CALL_VOID(mini_printf, fmt_ret, acc_r);
+    TRUSTED_CALL_VOID(mini_printf, fmt_ret, checksum);
+
+    ENTRY_POINT_END();
+}

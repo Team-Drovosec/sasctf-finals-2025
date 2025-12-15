@@ -1,0 +1,3 @@
+- run using `bun run index.ts check 127.0.0.1`
+- Logs are in `/var/log/mc-checker`
+- `index` is a wrapper around `main` to handle logs and checker public/private out

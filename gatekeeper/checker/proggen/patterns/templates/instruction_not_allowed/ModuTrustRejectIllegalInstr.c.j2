@@ -1,0 +1,114 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "trusted_lib_api.h"
+
+static inline void fill_buffers(uint8_t *buf, uint8_t *iv, uint8_t *tag, uint32_t size, int *illegal_inserted) {
+    for (uint32_t i = 0; i < size; ++i) {
+        buf[i] = (uint8_t)(i ^ 0xAA);
+
+        if (((( {{ seed }} ) + i) % 5) == 0) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            *illegal_inserted = 1;
+        }
+    }
+
+    for (uint32_t i = 0; i < 12; ++i)
+        iv[i] = (uint8_t)(0x10 + i);
+
+    for (uint32_t i = 0; i < 16; ++i)
+        tag[i] = 0;
+
+    if ((({{ seed }}) % 4) == 0) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        *illegal_inserted = 1;
+    }
+}
+
+static inline uint64_t create_and_sum(uint8_t *buf, uint32_t size, uint64_t *handles, int count, int *illegal_inserted) {
+    uint64_t acc = 0;
+#pragma unroll
+    for (int i = 0; i < count; ++i) {
+        uint64_t h = TRUSTED_CALL(create_file_plain, buf, size);
+        handles[i] = h;
+        acc += h;
+
+        if (((( {{ seed }} ) + i) % 6) == 2) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            *illegal_inserted = 1;
+        }
+    }
+    return acc;
+}
+
+static inline uint64_t read_and_accumulate(uint64_t *handles, uint32_t size, int count, int *illegal_inserted) {
+    uint64_t total = 0;
+#pragma unroll
+    for (int i = 0; i < count; ++i) {
+        uint8_t outbuf[{{ FILE_SIZE }}];
+        uint32_t outlen = size;
+        int32_t r = TRUSTED_CALL(read_file_plain, handles[i], outbuf, &outlen);
+        total += (uint64_t)(r + outlen);
+
+        if (((( {{ seed }} ) + i) % 7) == 3) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            *illegal_inserted = 1;
+        }
+    }
+
+    if ((({{ seed }}) % 3) == 1) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        *illegal_inserted = 1;
+    }
+
+    return total;
+}
+
+static inline uint64_t finalize(uint8_t *iv, uint8_t *tag, int *illegal_inserted) {
+    uint64_t s = 0;
+    for (int i = 0; i < 12; ++i) {
+        s += (uint64_t)(iv[i] + tag[i % 16]);
+
+        if (((( {{ seed }} ) + i) % 8) == 4) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            *illegal_inserted = 1;
+        }
+    }
+    return s;
+}
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t buf_plain[{{ FILE_SIZE }}];
+    uint8_t iv[12];
+    uint8_t tag[16];
+    uint64_t handles[{{ COUNT_PLAIN }}];
+    int illegal_inserted = 0;
+
+{% if FORMAT_CASE == 0 %}
+    char fmt_a[5] = {'%','l','l','x',0};
+    char fmt_b[3] = {'%','d',0};
+{% else %}
+    char fmt_a[3] = {'%','d',0};
+    char fmt_b[5] = {'%','l','l','x',0};
+{% endif %}
+
+    fill_buffers(buf_plain, iv, tag, {{ FILE_SIZE }}, &illegal_inserted);
+    uint64_t acc_create = create_and_sum(buf_plain, {{ FILE_SIZE }}, handles, {{ COUNT_PLAIN }}, &illegal_inserted);
+    uint64_t acc_read   = read_and_accumulate(handles, {{ FILE_SIZE }}, {{ COUNT_PLAIN }}, &illegal_inserted);
+    uint64_t acc_final  = finalize(iv, tag, &illegal_inserted);
+
+    if ((({{ seed }}) % 11) == 5) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        illegal_inserted = 1;
+    }
+
+    if (!illegal_inserted) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        illegal_inserted = 1;
+    }
+
+    TRUSTED_CALL_VOID(mini_printf, fmt_a, acc_create);
+    TRUSTED_CALL_VOID(mini_printf, fmt_b, acc_read);
+    TRUSTED_CALL_VOID(mini_printf, fmt_b, acc_final);
+
+    ENTRY_POINT_END();
+}

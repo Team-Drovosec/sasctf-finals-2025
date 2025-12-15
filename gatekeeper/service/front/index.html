@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GATEKEEPER ▮ SATCOM UPLINK CONTROL</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg-0: #0a0d12;
+            --bg-1: #0f1320;
+            --bg-2: #0c1020;
+            --grid-1: rgba(2, 205, 229, 0.12);
+            --grid-2: rgba(255, 45, 145, 0.08);
+
+            --accent-cyan: #27e9ff;
+            --accent-magenta: #ff3ea5;
+            --accent-violet: #a78bfa;
+            --accent-amber: #ffd166;
+            --accent-green: #7dffb2;
+            --accent-red: #ff7d7d;
+
+            --panel: rgba(16, 24, 44, 0.8);
+            --panel-border: rgba(105, 130, 255, 0.22);
+            --text: #e8f7ff;
+            --muted: #8aa7c7;
+            --crt-glow: 0 0 10px rgba(39, 233, 255, 0.15), 0 0 22px rgba(255, 62, 165, 0.15);
+        }
+
+        @keyframes scanlines {
+            0% {
+                background-position: 0 0;
+            }
+
+            100% {
+                background-position: 0 4px;
+            }
+        }
+
+        @keyframes flicker {
+
+            0%,
+            100% {
+                opacity: 0.98;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(39, 233, 255, 0.35);
+            }
+
+            70% {
+                box-shadow: 0 0 0 12px rgba(39, 233, 255, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(39, 233, 255, 0);
+            }
+        }
+
+        @keyframes sweep {
+            0% {
+                transform: translateX(-100%);
+            }
+
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        html,
+        body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            background:
+                radial-gradient(1200px 600px at 80% -10%, rgba(255, 62, 165, 0.15), transparent 60%),
+                radial-gradient(900px 700px at -10% 10%, rgba(39, 233, 255, 0.18), transparent 60%),
+                linear-gradient(0deg, var(--bg-1), var(--bg-0) 40%, var(--bg-2) 100%);
+            color: var(--text);
+            font-family: "Segoe UI", Tahoma, Helvetica, Arial, sans-serif;
+            overflow-x: hidden;
+        }
+
+        .grid-bg::before,
+        .grid-bg::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .grid-bg::before {
+            background-image:
+                linear-gradient(transparent 95%, var(--grid-1) 96%),
+                linear-gradient(90deg, transparent 95%, var(--grid-2) 96%);
+            background-size: 100% 40px, 40px 100%;
+            transform: perspective(800px) rotateX(60deg);
+            transform-origin: top center;
+            filter: blur(0.2px);
+            opacity: 0.5;
+        }
+
+        .grid-bg::after {
+            background: repeating-linear-gradient(to bottom,
+                    rgba(255, 255, 255, 0.06) 0px,
+                    rgba(255, 255, 255, 0.06) 1px,
+                    transparent 2px,
+                    transparent 3px);
+            mix-blend-mode: soft-light;
+            animation: scanlines 9s linear infinite;
+            opacity: 0.12;
+        }
+
+        .wrap {
+            position: relative;
+            min-height: 100dvh;
+            display: grid;
+            place-items: center;
+            padding: 4dvh 3vw 8dvh;
+        }
+
+        .bezel {
+            width: min(1100px, 96vw);
+            border: 2px solid var(--panel-border);
+            border-radius: 18px;
+            background: linear-gradient(180deg, rgba(10, 16, 30, 0.85), rgba(10, 16, 30, 0.65));
+            box-shadow:
+                0 0 0 3px rgba(39, 233, 255, 0.05) inset,
+                0 30px 60px rgba(0, 0, 0, 0.35);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .crt {
+            padding: clamp(18px, 2.8vw, 28px);
+            position: relative;
+            isolation: isolate;
+        }
+
+        .crt::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(130deg, rgba(255, 255, 255, 0.05), transparent 30%),
+                radial-gradient(600px 120px at 20% 2%, rgba(255, 255, 255, 0.08), transparent 60%);
+            mix-blend-mode: overlay;
+            opacity: 0.4;
+        }
+
+        header.panel-header {
+            display: grid;
+            grid-template-columns: 1.2fr auto 0.9fr;
+            gap: 16px;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand .badge {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            background: radial-gradient(circle at 30% 30%, var(--accent-magenta), #fd47b1);
+            box-shadow: 0 0 12px var(--accent-magenta);
+            animation: pulse 2.6s ease-out infinite;
+        }
+
+        h1.title {
+            margin: 0;
+            font-size: clamp(20px, 3vw, 28px);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            text-shadow: 0 0 8px rgba(255, 62, 165, 0.35), 0 0 16px rgba(39, 233, 255, 0.25);
+            filter: drop-shadow(0 0 4px rgba(39, 233, 255, 0.25));
+        }
+
+        .status-lamps {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 10px;
+            font-family: "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .lamp {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border: 1px solid rgba(39, 233, 255, 0.25);
+            border-radius: 8px;
+            background: linear-gradient(180deg, rgba(15, 24, 46, 0.8), rgba(15, 24, 46, 0.35));
+        }
+
+        .led {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #3a5158;
+            box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.8);
+        }
+
+        .led.on.green {
+            background: radial-gradient(circle at 30% 30%, #7dffb2, #21bf6b);
+            box-shadow: 0 0 10px #7dffb2;
+        }
+
+        .led.on.cyan {
+            background: radial-gradient(circle at 30% 30%, #27e9ff, #00b7d3);
+            box-shadow: 0 0 10px #27e9ff;
+        }
+
+        .led.on.magenta {
+            background: radial-gradient(circle at 30% 30%, #ff3ea5, #c90069);
+            box-shadow: 0 0 10px #ff3ea5;
+        }
+
+        .divider {
+            margin: 10px 0 18px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(39, 233, 255, 0.6) 25%, rgba(255, 62, 165, 0.7) 50%, rgba(39, 233, 255, 0.6) 75%, transparent);
+            box-shadow: var(--crt-glow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .divider::after {
+            content: "";
+            position: absolute;
+            top: -2px;
+            bottom: -2px;
+            width: 25%;
+            left: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+            animation: sweep 2.2s linear infinite;
+        }
+
+        main.grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: clamp(14px, 2.5vw, 22px);
+        }
+
+        @media (max-width: 900px) {
+            main.grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            border: 1px solid var(--panel-border);
+            border-radius: 14px;
+            background: linear-gradient(180deg, rgba(16, 23, 44, 0.9), rgba(16, 23, 44, 0.55));
+            padding: clamp(14px, 2.2vw, 22px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .panel::before {
+            content: attr(data-label);
+            position: absolute;
+            top: 10px;
+            right: 14px;
+            font-family: "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 10px;
+            letter-spacing: 0.18em;
+            color: rgba(167, 139, 250, 0.9);
+        }
+
+        .panel h2 {
+            margin: 0 0 4px;
+            font-size: clamp(16px, 2vw, 20px);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 8px rgba(39, 233, 255, 0.5);
+        }
+
+        .subttl {
+            margin: 0 0 12px;
+            color: var(--muted);
+        }
+
+        .filebar {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 12px;
+            align-items: center;
+            margin: 10px 0 8px;
+        }
+
+        label.btn-file {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            user-select: none;
+            border: 1px solid rgba(39, 233, 255, 0.35);
+            background: linear-gradient(180deg, rgba(10, 20, 34, 0.95), rgba(10, 20, 34, 0.55));
+            color: var(--text);
+            text-shadow: 0 0 6px rgba(39, 233, 255, 0.25);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+            transition: transform .12s ease, box-shadow .12s ease;
+        }
+
+        label.btn-file::before {
+            content: "";
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            background: radial-gradient(circle at 30% 30%, var(--accent-cyan), #0cb3c8);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            flex: 0 0 auto;
+        }
+
+        label.btn-file:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 26px rgba(39, 233, 255, 0.18);
+        }
+
+        label.btn-file:active {
+            transform: translateY(0);
+        }
+
+        label.btn-file:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 26px rgba(39, 233, 255, 0.18);
+        }
+
+        label.btn-file:active {
+            transform: translateY(0);
+        }
+
+        input[type=file] {
+            display: none;
+        }
+
+        .fname {
+            min-height: 38px;
+            display: grid;
+            align-items: center;
+            padding: 0 10px;
+            border-radius: 8px;
+            border: 1px dashed rgba(167, 139, 250, 0.35);
+            color: #d9e9ff;
+            font-weight: 600;
+            font-size: 13px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .card {
+            border: 1px solid rgba(167, 139, 250, 0.25);
+            background: linear-gradient(180deg, rgba(20, 26, 48, 0.85), rgba(20, 26, 48, 0.45));
+            padding: 10px 12px;
+            border-radius: 10px;
+        }
+
+        .card span {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .card strong {
+            display: block;
+            margin-top: 4px;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .btn {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px 18px;
+            border-radius: 10px;
+            border: none;
+            font-weight: 800;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            background: linear-gradient(120deg, #0cb3c8, #ff4fb2);
+            color: #fff;
+            cursor: pointer;
+            transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+            box-shadow: 0 10px 30px rgba(255, 79, 178, 0.18);
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 34px rgba(255, 79, 178, 0.26);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            cursor: not-allowed;
+            filter: grayscale(0.5) brightness(0.8);
+            box-shadow: none;
+            background: #2b3553;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.28);
+            border-top-color: #fff;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .status {
+            min-height: 18px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            margin-top: 10px;
+            text-shadow: 0 0 8px rgba(255, 255, 255, 0.15);
+        }
+
+        .status.info {
+            color: #9ac8ff;
+        }
+
+        .status.success {
+            color: var(--accent-green);
+        }
+
+        .status.error {
+            color: var(--accent-red);
+        }
+
+        .sig {
+            margin-top: 10px;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(39, 233, 255, 0.25);
+            background: linear-gradient(180deg, rgba(13, 21, 40, 0.9), rgba(13, 21, 40, 0.55));
+            font-family: "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            color: #e1f6ff;
+            font-size: 13px;
+            word-break: break-all;
+        }
+
+        .terminal {
+            background: #05110a;
+            border: 1px solid rgba(125, 255, 178, 0.25);
+            border-radius: 12px;
+            padding: 12px;
+            font-family: "Fira Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 13.5px;
+            color: #a9ffcd;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            min-height: 160px;
+            box-shadow: 0 0 18px rgba(125, 255, 178, 0.06) inset;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .crt-text {
+            animation: flicker 4s ease-in-out infinite;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="grid-bg"></div>
+    <div class="wrap">
+        <div class="bezel">
+            <div class="crt">
+                <header class="panel-header" aria-label="Header">
+                    <div class="brand">
+                        <div class="badge" aria-hidden="true"></div>
+                        <h1 class="title crt-text">GATEKEEPER · SATCOM UPLINK CONTROL</h1>
+                    </div>
+                    <div class="divider" aria-hidden="true"></div>
+                    <div class="status-lamps">
+                        <div class="lamp" title="Power">
+                            <span class="led on green" aria-hidden="true"></span> PWR
+                        </div>
+                        <div class="lamp" id="lampVerify" title="Verifier">
+                            <span class="led" aria-hidden="true"></span> VRF
+                        </div>
+                        <div class="lamp" id="lampExec" title="Executor">
+                            <span class="led" aria-hidden="true"></span> EXE
+                        </div>
+                        <div class="lamp" id="lampLink" title="Link">
+                            <span class="led on cyan" aria-hidden="true"></span> LINK
+                        </div>
+                    </div>
+                </header>
+
+                <main class="grid" role="main">
+                    <section class="panel" data-label="VERIFIER">
+                        <h2>VERIFICATION</h2>
+                        <p class="subttl">Upload flat RISCV-64 binary for verification.</p>
+
+                        <div class="filebar">
+                            <label class="btn-file" for="binaryInput" aria-label="Load binary">
+                                LOAD BIN
+                                <input id="binaryInput" type="file" accept="application/octet-stream,.bin" />
+                            </label>
+                            <div class="fname" id="fileName">No file selected</div>
+                        </div>
+
+                        <div class="stats" id="fileStats" aria-live="polite">
+                            <div class="card"><span>FILE SIZE</span><strong id="fileSize">—</strong></div>
+                            <div class="card"><span>LAST MODIFIED</span><strong id="fileModified">—</strong></div>
+                        </div>
+
+                        <div class="row">
+                            <button class="btn" id="verifyButton" disabled>
+                                <span class="spinner hidden" aria-hidden="true"></span>
+                                <span class="label">INITIATE VERIFY</span>
+                            </button>
+                        </div>
+                        <div class="status info" id="verifyStatus">Awaiting binary upload.</div>
+
+                        <div class="sig hidden" id="signatureWrapper" aria-live="polite">
+                            <div style="color:var(--muted); margin-bottom:6px;">SIGNATURE</div>
+                            <div id="signatureValue">—</div>
+                        </div>
+                    </section>
+
+                    <section class="panel" data-label="EXECUTOR">
+                        <h2>EXECUTION</h2>
+                        <p class="subttl">Uplink payload to the RV64 orbital sandbox.</p>
+
+                        <div class="row">
+                            <button class="btn" id="executeButton" disabled>
+                                <span class="spinner hidden" aria-hidden="true"></span>
+                                <span class="label">START UPLINK</span>
+                            </button>
+                        </div>
+                        <div class="status info" id="executeStatus">Verification must succeed before execution.</div>
+
+                        <div class="row" id="consoleWrapper" style="margin-top:12px;">
+                            <div class="terminal" id="qemuOutput" role="log" aria-live="polite"></div>
+                        </div>
+                    </section>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        'use strict';
+
+        const Beeper = (() => {
+            let ctx;
+            function beep(f = 880, t = 0.06, type = 'square', gain = 0.02) {
+                try {
+                    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+                    const o = ctx.createOscillator();
+                    const g = ctx.createGain();
+                    o.type = type; o.frequency.value = f; g.gain.value = gain;
+                    o.connect(g); g.connect(ctx.destination); o.start();
+                    o.stop(ctx.currentTime + t);
+                } catch (_) { }
+            }
+            return { beep };
+        })();
+
+        const fileInput = document.getElementById('binaryInput');
+        const fileNameLabel = document.getElementById('fileName');
+        const fileStats = document.getElementById('fileStats');
+        const fileSizeLabel = document.getElementById('fileSize');
+        const fileModifiedLabel = document.getElementById('fileModified');
+
+        const verifyButton = document.getElementById('verifyButton');
+        const verifyStatus = document.getElementById('verifyStatus');
+
+        const signatureWrapper = document.getElementById('signatureWrapper');
+        const signatureValue = document.getElementById('signatureValue');
+
+        const executeButton = document.getElementById('executeButton');
+        const executeStatus = document.getElementById('executeStatus');
+
+        const consoleWrapper = document.getElementById('consoleWrapper');
+        const qemuOutput = document.getElementById('qemuOutput');
+
+        const lampVerify = document.getElementById('lampVerify').querySelector('.led');
+        const lampExec = document.getElementById('lampExec').querySelector('.led');
+
+        let selectedFile = null;
+        let verified = false;
+        let signature = null;
+        let programBase64 = null;
+
+        function setStatus(el, msg, type) {
+            el.textContent = msg;
+            el.className = `status ${type}`;
+        }
+        function setLamp(el, on, colorClass) {
+            el.className = 'led' + (on ? ` on ${colorClass}` : '');
+        }
+        function startLoading(btn) {
+            btn.classList.add('loading');
+            const s = btn.querySelector('.spinner');
+            if (s) s.classList.remove('hidden');
+            btn.disabled = true;
+        }
+        function stopLoading(btn, enable) {
+            btn.classList.remove('loading');
+            const s = btn.querySelector('.spinner');
+            if (s) s.classList.add('hidden');
+            if (typeof enable === 'boolean') btn.disabled = !enable;
+        }
+        function formatBytes(bytes) {
+            if (!Number.isFinite(bytes)) return 'Unknown';
+            if (bytes === 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB'];
+            const e = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+            const v = bytes / 1024 ** e; const fixed = v >= 100 ? 0 : v >= 10 ? 1 : 2;
+            return `${v.toFixed(fixed)} ${units[e]}`;
+        }
+
+        async function fetchJson(url, options, fallbackMessage) {
+            const res = await fetch(url, options);
+            const text = await res.text();
+            let data = {};
+            if (text) {
+                try { data = JSON.parse(text); } catch { throw new Error('Server returned invalid JSON payload.'); }
+            }
+            if (!res.ok) {
+                const reason = data.issue || data.error || data.message || text || fallbackMessage;
+                throw new Error(reason);
+            }
+            return data;
+        }
+
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const r = new FileReader();
+                r.onerror = () => reject(new Error('I/O error while reading the file.'));
+                r.onload = () => {
+                    const result = r.result;
+                    if (typeof result !== 'string') return resolve(null);
+                    const i = result.indexOf(',');
+                    resolve(i >= 0 ? result.slice(i + 1) : null);
+                };
+                r.readAsDataURL(file);
+            });
+        }
+
+        async function readProgramBase64() {
+            if (!selectedFile) return null;
+            const current = selectedFile;
+            try {
+                const base64 = await readFileAsBase64(current);
+                if (!base64) return null;
+                if (selectedFile !== current) return readProgramBase64();
+                programBase64 = base64;
+                return base64;
+            } catch (e) {
+                console.error('Failed to read binary file:', e);
+                return null;
+            }
+        }
+
+        function resetState() {
+            selectedFile = null; verified = false; signature = null; programBase64 = null;
+            fileNameLabel.textContent = 'No file selected';
+            fileStats.classList.add('hidden');
+            signatureWrapper.classList.add('hidden');
+            verifyButton.disabled = true; executeButton.disabled = true;
+            setStatus(verifyStatus, 'Awaiting binary upload.', 'info');
+            setStatus(executeStatus, 'Verification must succeed before execution.', 'info');
+            consoleWrapper.classList.add('hidden'); qemuOutput.textContent = '';
+            setLamp(lampVerify, false, 'magenta'); setLamp(lampExec, false, 'cyan');
+        }
+
+        // ===== Events =====
+        fileInput.addEventListener('change', (e) => {
+            const input = e.target;
+            const file = (input.files && input.files.length) ? input.files[0] : null;
+            if (!file) { resetState(); return; }
+
+            selectedFile = file; verified = false; signature = null; programBase64 = null;
+            fileNameLabel.textContent = file.name || 'Unnamed file';
+            fileSizeLabel.textContent = formatBytes(file.size);
+            fileModifiedLabel.textContent = file.lastModified ? new Date(file.lastModified).toLocaleString() : 'Unknown';
+            fileStats.classList.remove('hidden');
+
+            signatureWrapper.classList.add('hidden'); signatureValue.textContent = '';
+            verifyButton.disabled = false; executeButton.disabled = true;
+            consoleWrapper.classList.add('hidden'); qemuOutput.textContent = '';
+
+            setStatus(verifyStatus, 'Ready to verify.', 'info');
+            setStatus(executeStatus, 'Verification must succeed before execution.', 'info');
+            setLamp(lampVerify, false, 'magenta'); setLamp(lampExec, false, 'cyan');
+
+            Beeper.beep(760, 0.05, 'square', 0.02);
+
+            input.value = '';
+        });
+
+        verifyButton.addEventListener('click', async () => {
+            if (!selectedFile) { setStatus(verifyStatus, 'Select a binary before verifying.', 'error'); return; }
+            startLoading(verifyButton); setStatus(verifyStatus, 'Verification in progress…', 'info');
+            signatureWrapper.classList.add('hidden'); executeButton.disabled = true;
+            verified = false; signature = null; setLamp(lampVerify, false, 'magenta');
+
+            try {
+                const program = await readProgramBase64();
+                if (!program) throw new Error('Failed to read binary file.');
+
+                const data = await fetchJson('/verify', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ program })
+                }, 'Verification failed.');
+
+                if (data.result !== 'success') {
+                    const reason = data.issue || data.error || data.message || 'Verification rejected.';
+                    throw new Error(reason);
+                }
+
+                signature = data.signature || null; verified = true;
+                if (signature) { signatureValue.textContent = signature; signatureWrapper.classList.remove('hidden'); }
+                setStatus(verifyStatus, data.message || 'Verification successful.', 'success');
+                executeButton.disabled = false; setStatus(executeStatus, 'Binary verified. Ready for execution.', 'success');
+                setLamp(lampVerify, true, 'magenta'); Beeper.beep(1200, 0.08, 'square', 0.03);
+            } catch (err) {
+                verified = false; signature = null; programBase64 = null;
+                setStatus(verifyStatus, err.message || 'Verification failed.', 'error');
+                executeButton.disabled = true; signatureWrapper.classList.add('hidden'); setLamp(lampVerify, false, 'magenta');
+                Beeper.beep(220, 0.12, 'sawtooth', 0.03);
+            } finally {
+                stopLoading(verifyButton, Boolean(selectedFile));
+            }
+        });
+
+        executeButton.addEventListener('click', async () => {
+            if (!selectedFile || !verified) { setStatus(executeStatus, 'Verify the binary before execution.', 'error'); return; }
+            startLoading(executeButton); setStatus(executeStatus, 'Establishing uplink…', 'info');
+            consoleWrapper.classList.add('hidden'); qemuOutput.textContent = '';
+            setLamp(lampExec, false, 'cyan');
+
+            try {
+                if (!signature) throw new Error('Missing signature. Please verify again.');
+                const program = await readProgramBase64();
+                if (!program) throw new Error('Failed to read binary file.');
+
+                const payload = { program, signature };
+                const data = await fetchJson('/execute', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }, 'Execution failed.');
+
+                if (data.status !== 'success') {
+                    const reason = data.message || data.error || 'Execution rejected.';
+                    throw new Error(reason);
+                }
+
+                const outputBase64 = data.stdout || data.output || '';
+                const decoded = decodeBase64ToString(outputBase64);
+                qemuOutput.textContent = decoded !== null ? decoded : `[base64] ${outputBase64}`;
+                consoleWrapper.style.display = 'block'; consoleWrapper.classList.remove('hidden');
+                setStatus(executeStatus, data.message || 'Execution complete.', 'success');
+                setLamp(lampExec, true, 'cyan'); Beeper.beep(980, 0.08, 'triangle', 0.03);
+            } catch (err) {
+                setStatus(executeStatus, err.message || 'Execution failed.', 'error');
+                if (String(err.message || '').toLowerCase().includes('signature')) {
+                    verified = false; executeButton.disabled = true; setStatus(verifyStatus, 'Signature invalid. Please verify again.', 'error'); setLamp(lampVerify, false, 'magenta');
+                }
+                Beeper.beep(240, 0.12, 'sawtooth', 0.03);
+            } finally {
+                stopLoading(executeButton, verified);
+            }
+        });
+
+        function decodeBase64ToString(base64) {
+            if (!base64) return '';
+            try {
+                const bin = atob(base64);
+                const len = bin.length; const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+                return new TextDecoder().decode(bytes);
+            } catch (e) { console.warn('Failed to decode base64 stdout:', e); return null; }
+        }
+
+        // Init
+        resetState();
+    </script>
+</body>
+
+</html>

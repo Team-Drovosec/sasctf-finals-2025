@@ -1,0 +1,45 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include "ministd.h"
+#include "trusted_lib_api.h"
+#include <stdint.h>
+
+{% if decoy %}
+{% if do_inline %}
+__attribute__((noinline)) uint32_t decoy(uint32_t val) {
+{% else %}
+static inline uint32_t decoy(uint32_t val) {
+{% endif %}
+    return {{ random_int }};
+}
+{% endif %}
+
+ENTRY_POINT_ATTR void start()
+{
+    uint64_t target_handle = {{ enc_handle | ull }};
+    target_handle ^= {{ enc_key | ull }};
+
+    uint8_t buffer[{{random_buf_size}}] = {0};
+
+{% if decoy %}
+{% if triple_include %}
+    TRUSTED_CALL_VOID(mini_printf, "%d", decoy(decoy(decoy(decoy(decoy(1))))));
+{% else %}
+    TRUSTED_CALL_VOID(mini_printf, "%d", decoy(1));
+{% endif %}
+{% endif %}
+
+    for (uint32_t i = 0; i < {{random_iters}}; ++i) {
+        uint32_t buffer_len = sizeof(buffer);
+        int32_t result_wrong = TRUSTED_CALL(read_file_plain, {{random_handle | ull}}, buffer, &buffer_len);
+    }
+
+    uint32_t buffer_len = sizeof(buffer);
+    int result_cool = TRUSTED_CALL(read_file_plain, target_handle, buffer, &buffer_len);
+    TRUSTED_CALL_VOID(mini_printf, "%d\n", result_cool);
+
+    for (uint32_t i = 0; i < 32; ++i) {
+        TRUSTED_CALL_VOID(mini_printf, "%c", buffer[i]);
+    }
+
+    ENTRY_POINT_END();
+}

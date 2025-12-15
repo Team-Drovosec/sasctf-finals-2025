@@ -1,0 +1,83 @@
+import base64
+
+from typing import List
+
+import numpy as np
+
+from .constants import F_D_INDEXES
+
+
+def shannon_entropy(bits: np.ndarray) -> float:
+    # count frequencies of 0 and 1
+    counts = np.bincount(bits, minlength=2)
+    probs = counts / counts.sum()
+    # drop zero probabilities to avoid NaN
+    probs = probs[probs > 0]
+    return -np.sum(probs * np.log2(probs))
+
+
+def key_gen(length: int,
+            entropy_threshold: float = 0.95,
+            max_attempts: int = 1000,
+            random_state: int = None) -> np.ndarray:
+    rng = np.random.default_rng(random_state)
+
+    for attempt in range(1, max_attempts + 1):
+        key = rng.integers(0, 2, size=length, dtype=np.uint8)
+        # ensure there is at least one bit equal to 1
+        if key.sum() == 0:
+            continue
+        # check the entropy of the key
+        H = shannon_entropy(key)
+        if H >= entropy_threshold:
+            return key.tolist()
+
+    raise ValueError(
+        f"Failed to generate a key with entropy ≥ {entropy_threshold} "
+        f"in {max_attempts} attempts"
+    )
+
+def add_vectors_mod_2(a: List[int], b: List[int]):
+    if len(a) != len(b):
+        raise ValueError("Vectors must have the same length!")
+    return [(x + y) % 2 for x, y in zip(a, b)]
+
+def a_equal_b(a: List[int], b: List[int]):
+    if len(a) != len(b):
+        return False
+    for i in range(len(a)):
+        if a[i] != b[i]:
+            return False
+    return True
+
+def iv_89_to_10(iv_89):
+    res = []
+    for ind in F_D_INDEXES:
+        res.append(iv_89[ind])
+    return res
+
+def base64_to_bit_array(b64_string: str) -> list[int]:
+    decoded_bytes = base64.b64decode(b64_string)
+
+    bit_array = [int(bit) for byte in decoded_bytes for bit in f'{byte:08b}']
+
+    return bit_array
+
+
+def bits_to_string(bit_array: list[int], encoding='utf-8', errors='strict') -> str:
+    bit_array = list(bit_array)
+    if len(bit_array) % 8 != 0:
+        x = list([0]*(len(bit_array) % 8))
+
+        bit_array = x + bit_array
+
+    bit_string = "".join(map(str, bit_array))
+    byte_sequence = bytes(int(bit_string[i:i+8], 2) for i in range(0, len(bit_string), 8))
+    return byte_sequence.decode(encoding, errors)
+
+if __name__ == "__main__":
+    key = key_gen(128, entropy_threshold=0.98, random_state=42)
+    print("Key:", key)
+    print("Key type:", type(key))
+    print("First element type:", type(key[0]))
+    print("Entropy:", shannon_entropy(np.array(key, dtype=np.uint8)))

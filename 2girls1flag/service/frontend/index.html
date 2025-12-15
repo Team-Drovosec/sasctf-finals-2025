@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>2Girls1Flag</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main id="app">
+      <section id="view-menu" class="view hidden">
+        <div class="viewport">
+          <div class="stage menu-stage">
+            <div class="menu-panel">
+              <h2>2Girls1Flag</h2>
+              <div class="stack">
+                <button id="btn-menu-create" class="btn primary" type="button">Create Girl</button>
+                <button id="btn-menu-my" class="btn" type="button">My Girls</button>
+                <button id="btn-menu-all" class="btn" type="button">All Girls</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section id="view-login" class="view hidden">
+        <div class="card">
+          <h2>Login</h2>
+          <div class="stack">
+            <button id="btn-create-user" class="btn primary" type="button">Create New User</button>
+          </div>
+          <div class="sep"></div>
+          <div class="stack">
+            <label for="existing-user-id" class="label">Existing User ID</label>
+            <input id="existing-user-id" class="input" placeholder="UUID..." />
+            <button id="btn-login-existing" class="btn" type="button">Login</button>
+          </div>
+          <p id="login-error" class="error" hidden></p>
+        </div>
+      </section>
+      <section id="view-browser" class="view hidden">
+        <button id="btn-back-browser" class="backtop btn ghost" type="button">Back to menu ></button>
+        <div id="girls-grid" class="grid"></div>
+        <div class="pager">
+          <button id="btn-prev" class="btn" type="button">&lt; Prev</button>
+          <span id="page-indicator">1 / 1</span>
+          <button id="btn-next" class="btn" type="button">Next &gt;</button>
+        </div>
+      </section>
+      <section id="view-chat" class="view hidden">
+        <div class="viewport">
+          <div class="stage" id="stage">
+            <button id="btn-back-chat" class="backtop btn ghost" type="button">Back to menu ></button>
+            <div id="sprite-layer" class="sprite-layer">
+              <img id="sprite-img" alt="girl" />
+            </div>
+              <div class="bottom-ui">
+              <div class="inputbar">
+                <input id="chat-input" class="input large" placeholder="Type a message..." minlength="2" maxlength="1000" />
+                <button id="btn-send" class="btn primary large" type="button">Send</button>
+              </div>
+              <div class="message-window">
+                <div class="message-meta"><span id="girl-name">Girl</span></div>
+                <div id="chat-message" class="message-text"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+  </html>
+
+

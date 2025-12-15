@@ -1,0 +1,298 @@
+{{define "header"}}
+<header class="mb-8">
+    <div class="flex justify-between items-center min-h-[7rem]">
+        <a class="text-3xl font-bold text-chess-primary dark:text-blue-400" href="/">OnlyChess</a>
+
+        <div class="flex-1 mx-8 min-w-0">
+            <div id="recent-games-list" class="flex space-x-4 overflow-x-auto pb-4 pt-4">
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-4">
+            <button id="theme-toggle" type="button" class="text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700 rounded-lg text-sm p-2.5">
+                <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                <svg id="theme-toggle-light-icon" class="hidden w-5 h-5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+            </button>
+            
+            {{ if .User.Username }}
+            <div id="user-info">
+                <span id="current-user" class="font-medium dark:text-gray-200">{{ .User.Username }}</span>
+                <button id="logout-btn" class="ml-4 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Logout</button>
+            </div>
+            {{ else }}
+            <button id="login-btn" class="bg-chess-primary hover:bg-chess-secondary text-white px-4 py-2 rounded">Login</button>
+            <button id="register-btn" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded">Register</button>
+            <span class="hidden" id="anon-id">{{ .User.AnonymousID }}</span>
+            {{ end }}
+        </div>
+    </div>
+
+    <div id="login-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
+            <h2 class="text-2xl font-bold mb-4 dark:text-white">Login</h2>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-300">Username:</label>
+                <input type="text" id="login-username-input" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Enter username">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-300">Password:</label>
+                <input type="password" id="login-password-input" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Enter password">
+            </div>
+            <div id="login-error" class="text-red-500 text-sm mb-3 hidden"></div>
+            <div class="flex justify-end space-x-3">
+                <button id="close-login" class="px-4 py-2 border rounded dark:border-gray-500 dark:text-gray-300 dark:hover:bg-gray-600">Cancel</button>
+                <button id="login-submit" class="bg-chess-primary text-white px-4 py-2 rounded">Login</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="register-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 hidden">
+        <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-96">
+            <h2 class="text-2xl font-bold mb-4 dark:text-white">Register</h2>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-300">Username:</label>
+                <input type="text" id="register-username-input" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Choose a username">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-medium mb-2 dark:text-gray-300">Password:</label>
+                <input type="password" id="register-password-input" class="w-full border rounded px-3 py-2 dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder="Create a password">
+            </div>
+            <div id="register-error" class="text-red-500 text-sm mb-3 hidden"></div>
+            <div class="flex justify-end space-x-3">
+                <button id="close-register" class="px-4 py-2 border rounded dark:border-gray-500 dark:text-gray-300 dark:hover:bg-gray-600">Cancel</button>
+                <button id="register-submit" class="bg-gray-600 text-white px-4 py-2 rounded">Register</button>
+            </div>
+        </div>
+    </div>
+</header>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const currentUser = "{{ .User.Username }}";
+
+    const themeToggleBtn = document.getElementById('theme-toggle');
+    const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
+    const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
+
+    const loginBtn = document.getElementById('login-btn');
+    const registerBtn = document.getElementById('register-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const loginModal = document.getElementById('login-modal');
+    const registerModal = document.getElementById('register-modal');
+    const closeLogin = document.getElementById('close-login');
+    const closeRegister = document.getElementById('close-register');
+    const loginSubmit = document.getElementById('login-submit');
+    const registerSubmit = document.getElementById('register-submit');
+    const loginError = document.getElementById('login-error');
+    const registerError = document.getElementById('register-error');
+    const loginUsernameInput = document.getElementById('login-username-input');
+    const loginPasswordInput = document.getElementById('login-password-input');
+    const registerUsernameInput = document.getElementById('register-username-input');
+    const registerPasswordInput = document.getElementById('register-password-input');
+
+    const recentGamesList = document.getElementById('recent-games-list');
+
+
+    function setupTheme() {
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+            themeToggleLightIcon.classList.remove('hidden');
+        } else {
+            document.documentElement.classList.remove('dark');
+            themeToggleDarkIcon.classList.remove('hidden');
+        }
+
+        themeToggleBtn.addEventListener('click', function() {
+            themeToggleDarkIcon.classList.toggle('hidden');
+            themeToggleLightIcon.classList.toggle('hidden');
+
+            if (localStorage.getItem('color-theme')) {
+                if (localStorage.getItem('color-theme') === 'light') {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                }
+            } else {
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                }
+            }
+        });
+    }
+
+    function getPlayerDisplayName(player) {
+        if (player && player.Username) {
+            return { displayName: player.Username, isGuest: false };
+        }
+        if (player && player.AnonymousID) {
+            const shortId = String(player.AnonymousID).slice(-4);
+            return { displayName: `Guest-${shortId}`, isGuest: true };
+        }
+        return { displayName: 'Unknown', isGuest: true };
+    }
+
+    async function fetchRecentGames() {
+        if (!recentGamesList) return;
+        try {
+            const response = await fetch('/recent-games');
+            if (response.ok) {
+                const games = await response.json();
+                renderRecentGames(games);
+            } else {
+                console.error('Failed to fetch recent games');
+            }
+        } catch (error) {
+            console.error('Error fetching recent games:', error);
+        }
+    }
+
+    function renderRecentGames(games) {
+        if (!recentGamesList) return;
+        
+        recentGamesList.innerHTML = '';
+
+        if (!games || games.length === 0) {
+            recentGamesList.innerHTML = `<p class="text-gray-500 italic">No active games.</p>`;
+            return;
+        }
+
+        games.forEach(game => {
+            const whitePlayer = getPlayerDisplayName(game.From);
+            const blackPlayer = getPlayerDisplayName(game.To);
+            const isMyTurn = (game.IsWhiteMove && whitePlayer.displayName === currentUser) || (!game.IsWhiteMove && blackPlayer.displayName === currentUser);
+            const turnText = game.IsWhiteMove ? `White's Turn` : `Black's Turn`;
+            const yourMoveBadge = isMyTurn ? `<span class="absolute -top-[11px] right-3 bg-green-500 text-white text-xs font-semibold px-3 py-1 rounded-full overflow-visible">Your move</span>` : '';
+            
+            const gameCard = document.createElement('a');
+            gameCard.href = `/game?id=${game.ID}`;
+            
+            const isCurrentPage = window.location.pathname === '/game' && window.location.search.includes(`id=${game.ID}`);
+            const cardBorder = isCurrentPage ? 'border-2 border-chess-primary dark:border-blue-400' : 'dark:border dark:border-gray-700';
+
+            gameCard.className = `bg-white dark:bg-gray-800 rounded-xl shadow p-4 w-52 flex-shrink-0 relative cursor-pointer hover:shadow-lg transition-shadow ${cardBorder}`;
+            
+            gameCard.innerHTML = `
+                ${yourMoveBadge}
+                <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm truncate">${whitePlayer.displayName} vs. ${blackPlayer.displayName}</h3>
+                <p class="text-sm ${isMyTurn ? 'text-green-600 dark:text-green-400 font-semibold' : 'text-gray-500 dark:text-gray-400 font-medium'} mt-1">
+                    ${turnText}
+                </p>
+            `;
+            recentGamesList.appendChild(gameCard);
+        });
+    }
+
+    function initGamesList() {
+        fetchRecentGames();
+        setInterval(fetchRecentGames, 5000);
+    }
+
+
+    // --- Authentication Functions ---
+    function setupAuthEventListeners() {
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => {
+                loginModal.classList.remove('hidden');
+                loginError.classList.add('hidden');
+                loginUsernameInput.value = '';
+                loginPasswordInput.value = '';
+            });
+        }
+        if (registerBtn) {
+            registerBtn.addEventListener('click', () => {
+                registerModal.classList.remove('hidden');
+                registerError.classList.add('hidden');
+                registerUsernameInput.value = '';
+                registerPasswordInput.value = '';
+            });
+        }
+        if (closeLogin) closeLogin.addEventListener('click', () => loginModal.classList.add('hidden'));
+        if (closeRegister) closeRegister.addEventListener('click', () => registerModal.classList.add('hidden'));
+        if (loginSubmit) loginSubmit.addEventListener('click', handleLogin);
+        if (registerSubmit) registerSubmit.addEventListener('click', handleRegister);
+        if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+    }
+
+    async function handleLogin() {
+        const username = loginUsernameInput.value.trim();
+        const password = loginPasswordInput.value.trim();
+        if (!username || !password) {
+            showError(loginError, 'Please enter both username and password');
+            return;
+        }
+        try {
+            const response = await fetch('/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                showError(loginError, errorData.message || 'Invalid username or password');
+            }
+        } catch (error) {
+            showError(loginError, 'Failed to connect to server');
+        }
+    }
+
+    async function handleRegister() {
+        const username = registerUsernameInput.value.trim();
+        const password = registerPasswordInput.value.trim();
+        if (!username || !password) {
+            showError(registerError, 'Please enter both username and password');
+            return;
+        }
+        if (password.length < 6) {
+            showError(registerError, 'Password must be at least 6 characters long');
+            return;
+        }
+        try {
+            const response = await fetch('/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                const errorData = await response.json().catch(() => ({}));
+                showError(registerError, errorData.message || 'Registration failed');
+            }
+        } catch (error) {
+            showError(registerError, 'Failed to connect to server');
+        }
+    }
+
+    function handleLogout() {
+        document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        window.location.reload();
+    }
+
+    function showError(errorElement, message) {
+        if (errorElement) {
+            errorElement.textContent = message;
+            errorElement.classList.remove('hidden');
+        }
+    }
+
+    setupTheme();
+    setupAuthEventListeners();
+    initGamesList();
+});
+</script>
+
+<style>
+    .dark body.bg-gray-100 {
+        background-color: #111827; 
+    }
+</style>
+
+{{end}}

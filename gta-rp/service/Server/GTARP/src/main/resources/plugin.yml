@@ -1,0 +1,13 @@
+name: GTARP
+version: '1.0-SNAPSHOT'
+main: com.mercial.use.prohibited.gtarp.GTARP
+api-version: '1.21'
+depend: [WorldEdit, WorldGuard]
+load: STARTUP
+commands:
+  work:
+    description: Opens the work management GUI.
+    usage: /work
+  home:
+    description: Teleports you to your home.
+    usage: /home

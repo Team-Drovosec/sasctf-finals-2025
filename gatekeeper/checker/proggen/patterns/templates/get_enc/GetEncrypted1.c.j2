@@ -1,0 +1,56 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include "ministd.h"
+#include "trusted_lib_api.h"
+#include <stdint.h>
+
+{% if decoy %}
+{% if do_inline %}
+__attribute__((noinline)) uint32_t decoy(uint32_t val) {
+{% else %}
+static inline uint32_t decoy(uint32_t val) {
+{% endif %}
+    return {{ random_int }};
+}
+{% endif %}
+
+ENTRY_POINT_ATTR void start()
+{
+    uint64_t target_handle = {{ enc_handle | ull }};
+    target_handle ^= {{ enc_key | ull }};
+
+    uint8_t auth_tag[16] = { {{auth_tag | join(', ')}} };
+    uint8_t wrong_tag[16] = { {{ random_tag | join(', ')}}};
+
+    uint8_t buffer[{{random_buf_size}}] = {0};
+    uint32_t buffer_len = sizeof(buffer);
+
+{% if decoy %}
+{% triple_include %}
+    TRUSTED_CALL_VOID(mini_printf, "%d", decoy(decoy(decoy(1))));
+{% else %}
+    TRUSTED_CALL_VOID(mini_printf, "%d", decoy(1));
+{% endif %}
+{% endif %}
+
+    for (uint32_t i = 0; i < {{random_iters}}; ++i) {
+        int32_t result_wrong = TRUSTED_CALL(read_file_enc, {{random_handle | ull}}, auth_tag, buffer, &buffer_len);
+    }
+
+{% if read_wrong_tag %}
+    int32_t result_wrong_2 = TRUSTED_CALL(read_file_enc, target_handle, (uint32_t *)wrong_tag, buffer, &buffer_len);
+{% endif %}
+
+    int result_cool = TRUSTED_CALL(read_file_enc, target_handle, (uint32_t *)auth_tag, buffer, &buffer_len);
+
+{% if need_random_prefix %}
+    uint8_t random_prefix[{{ random_prefix_size }}] = { {{random_prefix | join(', ')}} };
+    for (uint32_t i = 0; i < sizeof(random_prefix); ++i) {
+        TRUSTED_CALL_VOID(mini_printf, "%c", random_prefix[i]);
+    }
+{% endif %}
+    for (uint32_t i = 0; i < 32; ++i) {
+        TRUSTED_CALL_VOID(mini_printf, "%c", buffer[i]);
+    }
+
+    ENTRY_POINT_END();
+}

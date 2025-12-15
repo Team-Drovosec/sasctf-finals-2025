@@ -1,0 +1,4 @@
+aiohttp==3.13.1
+asyncio==4.0.0
+gornilo==1.0.1
+triton-library==1.0.0rc4

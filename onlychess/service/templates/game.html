@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChessHub - Online Chess Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        chess: {
+                            light: '#f0d9b5',
+                            dark: '#b58863',
+                            primary: '#2563eb',
+                            secondary: '#1e40af'
+                        }
+                    },
+                     maxWidth: {
+                        'md': '448px',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .board-wrapper {
+            display: grid;
+            grid-template-columns: 25px auto 25px;
+            grid-template-rows: 25px auto 25px;
+        }
+        .chess-board {
+            grid-column: 2 / 3;
+            grid-row: 2 / 3;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            border: 2px solid #374151; 
+        }
+        .coordinates {
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            color: #4a5568; 
+            font-size: 0.875rem;
+            font-weight: bold;
+            user-select: none;
+        }
+        .dark .coordinates {
+            color: #9ca3af; 
+        }
+        .ranks {
+            flex-direction: column-reverse;
+            grid-row: 2;
+        }
+        .files {
+            grid-column: 2;
+        }
+        .chess-square {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color: 0.2s;
+            position: relative; 
+        }
+        .chess-square.light { background-color: #f0d9b5; }
+        .chess-square.dark { background-color: #b58863; }
+        
+        .chess-square.highlight::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 35%;
+            height: 35%;
+            background-color: rgba(29, 185, 84, 0.7);
+            border-radius: 50%;
+            pointer-events: none; 
+        }
+        
+        .chess-square.selected { box-shadow: inset 0 0 0 3px rgba(37, 99, 235, 0.7); }
+        .piece {
+            user-select: none;
+            transition: transform 0.2s;
+            width: 80%;
+            height: 80%;
+            max-width: 45px;
+            max-height: 45px;
+            z-index: 1; 
+        }
+        .piece.dragging { transform: scale(1.2); }
+
+        .board-wrapper.flipped .chess-board {
+            transform: rotate(180deg);
+        }
+        .board-wrapper.flipped .chess-square .piece {
+            transform: rotate(180deg);
+        }
+        .board-wrapper.flipped .ranks {
+            flex-direction: column;
+        }
+        .board-wrapper.flipped .files {
+            flex-direction: row-reverse;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        
+        {{template "header" .}}
+
+
+<div class="grid grid-cols-1 lg:grid-cols-[2fr_3fr_2fr] gap-8">
+    
+    <div class="mx-auto w-full max-w-md min-w-0">
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 flex flex-col h-full max-h-100">
+            <h2 class="text-xl font-semibold mb-3 dark:text-white">Game Chat</h2>
+            <div id="game-info" class="mb-2 flex justify-between items-center text-sm">
+                <div>
+                    
+                    <span id="white-player" class="transition-all duration-300 ease-in-out">White: {{ .Game.From.ToString }}</span>
+                </div>
+                <div>
+                    <span id="black-player" class="transition-all duration-300 ease-in-out">Black: {{ .Game.To.ToString }} </span>
+                </div>
+            </div>
+            <div class="flex-grow"></div>
+            <div id="game-chat" class="space-y-2 overflow-y-auto mb-2 flex-1 min-h-[28rem] max-h-[28rem] overflow-scroll">
+                
+            </div>
+            {{if .User.Username }}
+            <div class="flex">
+                
+                <input type="text" id="game-chat-input" placeholder="Type a message..." class="flex-1 border rounded-l px-3 py-2 min-w-0 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                <button id="send-game-chat" class="bg-chess-primary hover:bg-chess-secondary text-white px-4 py-2 rounded-r">Send</button>
+            </div>
+            {{else}}
+            
+            <div class="text-center text-sm text-gray-500 dark:text-gray-400 py-2">
+                Sign in to chat.
+            </div>
+            {{end}}
+        </div>
+    </div>
+
+    
+    <div class="flex justify-center items-center min-w-0">
+        <div class="board-wrapper w-full max-w-[80vh] aspect-square">
+            <div class="coordinates files" style="grid-row: 1;">
+                <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+            </div>
+            <div class="coordinates files" style="grid-row: 3;">
+                <span>a</span><span>b</span><span>c</span><span>d</span><span>e</span><span>f</span><span>g</span><span>h</span>
+            </div>
+            <div class="coordinates ranks" style="grid-column: 1;">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span>
+            </div>
+            <div class="coordinates ranks" style="grid-column: 3;">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span>
+            </div>
+            <div class="chess-board" id="chess-board">
+                
+            </div>
+        </div>
+    </div>
+
+    
+    <div class="mx-auto w-full max-w-md min-w-0">
+        
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow p-4 flex flex-col h-full">
+            <h2 class="text-xl font-semibold mb-3 dark:text-white">Spectator Chat</h2>
+            <div class="flex-grow"></div>
+            <div id="spectator-chat" class="space-y-2 overflow-y-auto mb-3 flex-1 min-h-[30rem] max-h-[30rem] overflow-scroll">
+                
+            </div>
+            {{if .User.Username }}
+            <div class="flex">
+                
+                <input type="text" id="spectator-chat-input" placeholder="Comment as spectator..." class="flex-1 border rounded-l px-3 py-2 min-w-0 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                <button id="send-spectator-chat" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-r dark:bg-gray-600 dark:hover:bg-gray-700">Send</button>
+            </div>
+            {{else}}
+             
+            <div class="text-center text-sm text-gray-500 dark:text-gray-400 py-2">
+                Sign in to comment.
+            </div>
+            {{end}}
+        </div>
+    </div>
+</div>
+
+
+<script>
+    let currentUser = {{if .User}}"{{.User.ToString}}"{{else}}null{{end}};
+    let game; 
+    let selectedSquare = null; 
+    let gameInProgress = "{{ .Game.Status }}" === "started";
+    let websocket = null; 
+    let chatWebsocket = null; 
+    let playerColor = null; 
+    
+    const gameId = "{{ .Game.ID }}"; 
+    const initialFEN = "{{ .Game.FEN }}";
+    
+    let chatSecretKey = null;
+
+    const pieceSVGs = {
+        'K': 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg', 'Q': 'https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg', 'R': 'https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg', 'B': 'https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg', 'N': 'https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg', 'P': 'https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg', 'k': 'https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg', 'q': 'https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg', 'r': 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg', 'b': 'https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg', 'n': 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg', 'p': 'https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg'
+    };
+    
+    const chessBoard = document.getElementById('chess-board');
+    const gameChat = document.getElementById('game-chat');
+    const gameChatInput = document.getElementById('game-chat-input');
+    const sendGameChat = document.getElementById('send-game-chat');
+    const spectatorChat = document.getElementById('spectator-chat');
+    const spectatorChatInput = document.getElementById('spectator-chat-input');
+    const sendSpectatorChat = document.getElementById('send-spectator-chat');
+    const whitePlayerEl = document.getElementById('white-player');
+    const blackPlayerEl = document.getElementById('black-player');
+
+    async function init() {
+        fetchChatKey();
+
+        try {
+            game = new Chess(initialFEN);
+        } catch (e) {
+            console.error("Invalid FEN string provided. Falling back to default position.", initialFEN, e);
+            game = new Chess();
+        }
+
+        const whitePlayerName = "{{ .Game.From.ToString }}";
+        const blackPlayerName = "{{ .Game.To.ToString }}";
+        if (currentUser === whitePlayerName) {
+            playerColor = 'w';
+        } else if (currentUser === blackPlayerName) {
+            playerColor = 'b';
+        }
+
+        if (playerColor === 'b') {
+            document.querySelector('.board-wrapper').classList.add('flipped');
+        }
+        
+        
+        renderBoard();
+        setupEventListeners();
+        update_player_moves(game.turn() === 'w');
+    }
+
+    async function fetchChatKey() {
+        try {
+            const response = await fetch(`/chat-key?id=${gameId}`);
+            if (!response.ok) {
+                throw new Error(`Server responded with status ${response.status}`);
+            }
+            const rawKeyWithQuotes = await response.text();
+            const rawKey = rawKeyWithQuotes.startsWith('[') ? rawKeyWithQuotes.slice(1, -1) : rawKeyWithQuotes;
+            chatSecretKey = rawKey.split(',').map(Number);
+            
+            if (chatSecretKey.length !== 128 || isNaN(chatSecretKey[0])) {
+                throw new Error("Parsed secret key is invalid.");
+            }
+            
+            console.log("Successfully fetched and parsed chat encryption key.");
+        } catch (error) {
+            console.error("Error fetching chat key:", error);
+            addGameMessage("Private game chat is available only for players");
+            
+            const gameChatInputContainer = document.getElementById('send-game-chat')?.parentElement;
+            if (gameChatInputContainer) {
+                gameChatInputContainer.style.display = 'none';
+            }
+            chatSecretKey = null;
+        } finally {
+            setupWebSocket();
+            setupChatWebSocket();
+        }
+    }
+
+
+    function setupWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        const wsURL = `${protocol}//${host}/next-moves?id=${gameId}`;
+
+        websocket = new WebSocket(wsURL);
+
+        websocket.onopen = () => {
+            console.log('Game WebSocket connection established.');
+        };
+
+        websocket.onmessage = (event) => {
+            try {
+                const moveMessage = JSON.parse(event.data);
+                if (moveMessage.from && moveMessage.to) {
+                    if (playerColor && game.turn() === playerColor) {
+                        return;
+                    }
+                    const moveResult = game.move({ from: moveMessage.from, to: moveMessage.to, promotion: 'q' });
+                    if (moveResult) {
+                        addGameMessage(`Opponent moved: ${moveResult.san}`);
+                        renderBoard();
+                        update_player_moves(game.turn() === 'w');
+                    }
+                }
+            } catch (error) {
+                console.error('Error processing WebSocket message:', error);
+            }
+        };
+
+        websocket.onclose = () => {
+            console.log('Game WebSocket connection closed. Attempting to reconnect in 3 seconds...');
+            addGameMessage('Connection lost. Attempting to reconnect...');
+            setTimeout(setupWebSocket, 3000);
+        };
+
+        websocket.onerror = (error) => {
+            console.error('Game WebSocket error:', error);
+        };
+    }
+
+    function setupChatWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        const wsURL = `${protocol}//${host}/chat?id=${gameId}`;
+
+        chatWebsocket = new WebSocket(wsURL);
+
+        chatWebsocket.onopen = () => console.log('Chat WebSocket connection established.');
+
+        chatWebsocket.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                if (msg.is_private) {
+                    if (!chatSecretKey) {
+                        console.log("no secret key")
+                        return;
+                    }
+                    iv = msg["iv"]
+                    console.log(iv)
+
+                    try {
+                        const ciphertextBits = base64ToBits(msg.Content);
+                        const decipher = new Cipher(chatSecretKey);
+                        const decryptedBits = decipher.crypt(ciphertextBits, iv);
+                        const decryptedMessage = bitsToString(decryptedBits);
+                        addGameMessage(`${msg.user || 'Anonymous'}: ${decryptedMessage}`);
+                    } catch (decryptionError) {
+                        console.error("Decryption failed:", decryptionError);
+                        addGameMessage(`[Could not decrypt message from ${msg.user || 'Anonymous'}]`);
+                    }
+                } else {
+                    addSpectatorMessage(`${msg.user || 'Anonymous'}: ${msg.Content}`);
+                }
+            } catch (error) {
+                console.error('Error processing chat message:', error);
+            }
+        };
+
+        chatWebsocket.onclose = () => {
+            console.log('Chat WebSocket connection closed. Reconnecting in 3 seconds...');
+            setTimeout(setupChatWebSocket, 3000);
+        };
+
+        chatWebsocket.onerror = (error) => console.error('Chat WebSocket error:', error);
+    }
+
+    function setupEventListeners() {
+        if (sendGameChat && gameChatInput) {
+            sendGameChat.addEventListener('click', sendGameMessage);
+            gameChatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendGameMessage(); });
+        }
+        if (sendSpectatorChat && spectatorChatInput) {
+            sendSpectatorChat.addEventListener('click', sendSpectatorMessage);
+            spectatorChatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendSpectatorMessage(); });
+        }
+    }
+
+    function renderBoard() {
+        chessBoard.innerHTML = '';
+        const board = game.board();
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const square = document.createElement('div');
+                const algebraic = toAlgebraic(row, col);
+                square.className = `chess-square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+                square.dataset.algebraic = algebraic; 
+                const piece = board[row][col];
+                if (piece) {
+                    const pieceChar = piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase();
+                    const pieceEl = document.createElement('img');
+                    pieceEl.className = 'piece';
+                    pieceEl.src = pieceSVGs[pieceChar];
+                    pieceEl.alt = pieceChar;
+                    pieceEl.draggable = false;
+                    square.appendChild(pieceEl);
+                }
+                square.addEventListener('click', handleSquareClick);
+                chessBoard.appendChild(square);
+            }
+        }
+    }
+    
+    async function handleSquareClick(e) {
+        if (!gameInProgress || (playerColor && game.turn() !== playerColor)) return;
+        const square = e.target.closest('.chess-square');
+        if (!square) return;
+        const algebraic = square.dataset.algebraic;
+        const pieceOnTarget = game.get(algebraic);
+
+        if (selectedSquare) {
+            const move = { from: selectedSquare, to: algebraic, promotion: 'q' };
+            const targetSquareEl = document.querySelector(`.chess-square[data-algebraic="${algebraic}"]`);
+            if (targetSquareEl && targetSquareEl.classList.contains('highlight')) {
+                const fromSquare = selectedSquare;
+                const localMoveResult = game.move(move);
+                clearHighlightsAndSelection();
+                selectedSquare = null;
+                renderBoard();
+                try {
+                    await sendMoveToServer(gameId, fromSquare, algebraic);
+                    addGameMessage(`Your move: ${localMoveResult.san}`);
+                    update_player_moves(game.turn() === 'w');
+                } catch (error) {
+                    game.undo();
+                    renderBoard();
+                    console.error('Move rejected by server:', error);
+                    alert(`Invalid move: ${error.message || 'The server rejected your move.'}`);
+                }
+                return;
+            }
+        }
+
+        clearHighlightsAndSelection();
+        if (pieceOnTarget && pieceOnTarget.color === game.turn() && pieceOnTarget.color == playerColor) {
+            selectedSquare = algebraic;
+            square.classList.add('selected');
+            const moves = game.moves({ square: algebraic, verbose: true });
+            moves.forEach(m => {
+                document.querySelector(`.chess-square[data-algebraic="${m.to}"]`)?.classList.add('highlight');
+            });
+        } else {
+            selectedSquare = null;
+        }
+    }
+
+    function clearHighlightsAndSelection() {
+        document.querySelectorAll('.chess-square.selected').forEach(s => s.classList.remove('selected'));
+        document.querySelectorAll('.chess-square.highlight').forEach(s => s.classList.remove('highlight'));
+    }
+
+    async function sendMoveToServer(gameID, from, to) {
+        const response = await fetch('/move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ game: gameID, from, to })
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || `Server responded with status ${response.status}`);
+        }
+    }
+
+    function update_player_moves(is_white_move) {
+        const activeClasses = ['text-chess-primary', 'dark:text-blue-400', 'font-bold', 'bg-blue-100', 'dark:bg-gray-700', 'border-chess-primary', 'dark:border-blue-500', 'border-2', 'rounded-lg', 'px-2', 'py-1'];
+        const inactiveClasses = ['text-gray-600', 'dark:text-gray-400', 'font-semibold', 'bg-transparent', 'border-transparent', 'border-2', 'rounded-lg', 'px-2', 'py-1'];
+        if (is_white_move) {
+            whitePlayerEl.classList.remove(...inactiveClasses); whitePlayerEl.classList.add(...activeClasses);
+            blackPlayerEl.classList.remove(...activeClasses); blackPlayerEl.classList.add(...inactiveClasses);
+        } else {
+            blackPlayerEl.classList.remove(...inactiveClasses); blackPlayerEl.classList.add(...activeClasses);
+            whitePlayerEl.classList.remove(...activeClasses); whitePlayerEl.classList.add(...inactiveClasses);
+        }
+    }
+    
+    function toAlgebraic(row, col) { return 'abcdefgh'[col] + '87654321'[row]; }
+    
+    async function sendGameMessage() {
+        const message = gameChatInput.value.trim();
+        if (!message) return;
+
+        const payload = { game: gameId, message: message };
+
+        try {
+            const response = await fetch('/private-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (response.ok) {
+                gameChatInput.value = '';
+            } else {
+                const errorText = await response.text();
+                console.error('Failed to send private message:', response.status, errorText);
+                addGameMessage(`Error: Could not send message. ${errorText || 'Server error'}`);
+            }
+        } catch (error) {
+            console.error('Error sending private message:', error);
+            addGameMessage('Error: Could not send message. Check your connection.');
+        }
+    }
+
+    function sendSpectatorMessage() {
+        const message = spectatorChatInput.value.trim();
+        if (message && chatWebsocket && chatWebsocket.readyState === WebSocket.OPEN) {
+            const payload = { user: currentUser || 'Anonymous', is_private: false, content: message };
+            chatWebsocket.send(JSON.stringify(payload));
+            spectatorChatInput.value = '';
+        }
+    }
+    function addGameMessage(message) {
+        const messageEl = document.createElement('div');
+        messageEl.className = 'text-sm text-gray-800 dark:text-gray-300';
+        messageEl.textContent = message;
+        gameChat.appendChild(messageEl);
+        gameChat.scrollTop = gameChat.scrollHeight;
+    }
+    function addSpectatorMessage(message) {
+        const messageEl = document.createElement('div');
+        messageEl.className = 'text-sm text-gray-800 dark:text-gray-300';
+        messageEl.textContent = message;
+        spectatorChat.appendChild(messageEl);
+        spectatorChat.scrollTop = spectatorChat.scrollHeight;
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+    addSpectatorMessage('Welcome to ChessHub!');
+
+    class Cipher {
+        constructor(secretKey) {
+            if (!Array.isArray(secretKey) || secretKey.length !== 128) throw new Error("Key must be an array of 128 numbers.");
+            this.secretKey = [...secretKey];
+            
+            this.VECTOR = [0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0];
+        }
+        crypt(plaintext, iv) {
+            if (!Array.isArray(iv) || iv.length !== 128) throw new Error("IV must be an array of 128 numbers.");
+            let stateC = this._addVectorsMod2(this.secretKey.slice(0, 39), iv.slice(0, 39));
+            let stateD = this._addVectorsMod2(this.secretKey.slice(39), iv.slice(39));
+            let ciphertext = [];
+            for (const el of plaintext) {
+                const { c, newStateC } = this._clockC(stateC);
+                stateC = newStateC;
+                const { z, newStateD } = this._clockD(stateD, c);
+                stateD = newStateD;
+                ciphertext.push((el + z) % 2);
+            }
+            return ciphertext;
+        }
+        _feedbackC(state) { return (state[37] + state[25] + state[24] + state[22] + state[8] + state[6] + state[4] + state[0]) % 2; }
+        _fc(state) { return 2 * state[12] + state[20] + 1; }
+        _feedbackD(state) { return (state[88] + state[50] + state[47] + state[36] + state[34] + state[9] + state[6] + state[0]) % 2; }
+        _fd(state) {
+            const bits = [state[80], state[65], state[44], state[30], state[20], state[12], state[7], state[3], state[1], state[0]];
+            let index = 0;
+            for (const b of bits) {
+                if (b !== 0 && b !== 1) {
+                    console.error("Corrupt bit detected in cipher state:", b);
+                    throw new Error("state bits must be 0 or 1");
+                }
+                index = (index << 1) | b;
+            }
+            if (index >= this.VECTOR.length) {
+                throw new Error(`calculated index ${index} is out of bounds for VECTOR`);
+            }
+            return this.VECTOR[index];
+        }
+        _clockC(state) {
+            const c = this._fc(state);
+            const newBit = this._feedbackC(state);
+            const newStateC = [...state.slice(1), newBit];
+            return { c, newStateC };
+        }
+        _clockD(state, c) {
+            const z = this._fd(state);
+            let newStateD = [...state];
+            for (let i = 0; i < c; i++) {
+                const newBit = this._feedbackD(newStateD);
+                newStateD = [...newStateD.slice(1), newBit];
+            }
+            return { z, newStateD };
+        }
+        _addVectorsMod2(a, b) {
+            if (a.length !== b.length) throw new Error("vectors must be the same size");
+            return a.map((val, i) => (val + b[i]) % 2);
+        }
+    }
+
+    const decoder = new TextDecoder();
+    
+    function base64ToBytes(base64) {
+        const binString = atob(base64);
+        return Uint8Array.from(binString, (m) => m.codePointAt(0));
+    }
+
+    function base64ToBits(b64) {
+        const bytes = base64ToBytes(b64);
+        const bits = [];
+        bytes.forEach(byte => {
+            for (let i = 7; i >= 0; i--) {
+                bits.push((byte >> i) & 1);
+            }
+        });
+        return bits;
+    }
+
+    function bitsToString(bits) {
+        if (bits.length % 8 !== 0) {
+            console.warn("Bit array length is not a multiple of 8. Data may be corrupt.");
+        }
+        const byteLength = Math.floor(bits.length / 8);
+        const bytes = new Uint8Array(byteLength);
+        for (let i = 0; i < bytes.length; i++) {
+            let byte = 0;
+            for (let j = 0; j < 8; j++) {
+                byte = (byte << 1) | bits[i * 8 + j];
+            }
+            bytes[i] = byte;
+        }
+        return decoder.decode(bytes);
+    }
+
+</script>
+
+
+    </div>
+</body>
+</html>

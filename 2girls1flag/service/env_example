@@ -1,0 +1,11 @@
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=appdb
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+
+AI_URL="http://AI_IP:8000/v1"
+AI_MODEL="Qwen/Qwen3-VL-30B-A3B-Instruct"
+
+REDIS_HOST="redis"
+

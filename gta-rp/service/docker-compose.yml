@@ -1,0 +1,79 @@
+services:
+    auth-wiedersehen:
+        build: ./AuthWiedersehen
+        restart: always
+        ports:
+            - "25566:25566"
+        depends_on:
+            - redis
+            - postgres
+        environment:
+            - REDIS_HOST=redis
+            - REDIS_PORT=6379
+        volumes:
+            - auth-keys:/app/keys
+        cpus: 2
+        pids_limit: 1024
+        mem_limit: 1G
+        memswap_limit: 1G
+        ulimits:
+            nofile:
+                soft: 12000
+                hard: 12000
+
+    redis:
+        image: redis:7-alpine
+        restart: unless-stopped
+        volumes:
+            - redis-data:/data
+        command: redis-server --appendonly yes
+
+    postgres:
+        image: postgres:16
+        restart: unless-stopped
+        environment:
+            - POSTGRES_USER=gtarp_admin
+            - POSTGRES_PASSWORD=gtarp_secret
+            - POSTGRES_DB=postgres
+        volumes:
+            - db:/var/lib/postgresql/data
+            - ./db-init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+
+    server:
+        build: ./Server
+        restart: always
+        depends_on:
+            - postgres
+            - auth-wiedersehen
+        ports:
+            - "25565:25565"
+        volumes:
+            - server-world:/server/world
+            - server-logs:/server/logs
+            - server-wg-worlds:/server/plugins/WorldGuard/worlds
+            - server-wg-cache:/server/plugins/WorldGuard/cache
+            - server-gtarp:/server/plugins/GTARP
+        environment:
+            - DB_HOST=postgres
+            - DB_PORT=5432
+            - DB_NAME=gtarp
+            - DB_USER=gtarp_admin
+            - DB_PASSWORD=gtarp_secret
+        cpus: 8
+        pids_limit: 8096
+        mem_limit: 8G
+        memswap_limit: 8G
+        ulimits:
+            nofile:
+                soft: 12000
+                hard: 12000
+
+volumes:
+    server-world:
+    server-logs:
+    server-wg-worlds:
+    server-wg-cache:
+    server-gtarp:
+    db:
+    redis-data:
+    auth-keys:

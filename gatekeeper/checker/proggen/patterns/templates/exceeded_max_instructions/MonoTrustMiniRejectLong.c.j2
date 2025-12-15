@@ -1,0 +1,48 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t buf[128];
+    uint8_t iv[12];
+    uint8_t tag[16];
+
+    for (size_t i = 0; i < sizeof(buf); ++i)
+        buf[i] = (uint8_t)(i & 0xFF);
+    for (size_t i = 0; i < sizeof(iv); ++i)
+        iv[i] = (uint8_t)(0xA0 + i);
+    for (size_t i = 0; i < sizeof(tag); ++i)
+        tag[i] = (uint8_t)(0x10 + i);
+
+    char fmt_d[3] = {'%','d',0};
+    uint64_t acc = 0;
+
+    for (uint32_t i = 0; i < {{ LOOP_OUTER }}; ++i) {
+        for (uint32_t j = 0; j < {{ LOOP_MID }}; ++j) {
+#pragma unroll
+            for (uint32_t k = 0; k < {{ LOOP_INNER }}; ++k) {
+                size_t idx = (i + j + k) & 0x7F;
+                buf[idx] ^= (uint8_t)((i * j + k) & 0xFF);
+                acc += buf[idx] + iv[(j + k) % sizeof(iv)];
+                acc ^= (uint64_t)(tag[k % sizeof(tag)]) + (i ^ j ^ k);
+
+{% if PATTERN_VARIANT == 0 %}
+                if (((i + j + k) & 0x3F) == 0) {
+                    memxor(buf, iv, sizeof(iv));
+                    memcpy(tag, buf, (sizeof(tag) < sizeof(buf)) ? sizeof(tag) : sizeof(buf));
+                }
+{% else %}
+                if (((i + j + k) & 0x3F) == 0) {
+                    int cmpv = memcmp(buf, iv, sizeof(iv));
+                    memset(tag, (uint8_t)cmpv, sizeof(tag));
+                }
+{% endif %}
+            }
+        }
+    }
+
+    TRUSTED_CALL_VOID(mini_printf, fmt_d, (uint64_t)acc);
+
+    ENTRY_POINT_END();
+}

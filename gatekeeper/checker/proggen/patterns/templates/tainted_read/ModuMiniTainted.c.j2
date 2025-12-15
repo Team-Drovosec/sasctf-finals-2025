@@ -1,0 +1,74 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+static inline void fill_buffers(uint8_t *a, uint8_t *b, uint32_t size) {
+#pragma unroll
+    for (uint32_t i = 0; i < size; ++i) {
+        a[i] = (uint8_t)(i & 0xFF);
+        b[i] = (uint8_t)((i * 3 + 1) & 0xFF);
+    }
+}
+
+static inline uint64_t combine_xor(uint8_t *a, uint8_t *b, uint8_t *out, uint32_t size) {
+    memcpy(out, a, size);
+    memxor(out, b, size);
+    uint64_t acc = 0;
+#pragma unroll
+    for (uint32_t i = 0; i < size; ++i)
+        acc += out[i];
+    return acc;
+}
+
+static inline uint64_t compare_and_encode(uint8_t *a, uint8_t *b, uint32_t size) {
+    int cmpv = memcmp(a, b, size);
+    memset(a, (uint8_t)cmpv, size);
+    char tmp_hex[2 * 16 + 1];
+    hex_encode(a, 16, tmp_hex, 0);
+    uint64_t acc = 0;
+    for (int i = 0; i < 16; ++i)
+        acc += (uint8_t)tmp_hex[i];
+    return acc;
+}
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t a[{{ FILE_SIZE }}];
+    uint8_t b[{{ FILE_SIZE }}];
+    uint8_t out[{{ FILE_SIZE }}];
+
+    fill_buffers(a, b, {{ FILE_SIZE }});
+    uint64_t s1 = combine_xor(a, b, out, {{ FILE_SIZE }});
+    uint64_t s2 = compare_and_encode(a, b, {{ FILE_SIZE }});
+
+    /*************************************************************************/
+{% if TAINT_KIND == 0 %}
+    uint8_t tainted_buf[{{ TAINT_SIZE }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < sizeof(tainted_buf); ++t) {
+        tainted_acc += tainted_buf[t];
+    }
+{% elif TAINT_KIND == 1 %}
+    uint32_t tainted_buf32[{{ TAINT_SIZE_WORDS }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < {{ TAINT_SIZE_WORDS }}; ++t) {
+        tainted_acc += (uint64_t)tainted_buf32[t];
+    }
+{% else %}
+    uint64_t tainted_buf64[{{ TAINT_SIZE_QWORDS }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < {{ TAINT_SIZE_QWORDS }}; ++t) {
+        tainted_acc += tainted_buf64[t];
+    }
+{% endif %}
+    s1 += tainted_acc;
+    /*************************************************************************/
+
+    volatile uint64_t final_val = s1 + s2;
+    (void)final_val;
+
+    ENTRY_POINT_END();
+}

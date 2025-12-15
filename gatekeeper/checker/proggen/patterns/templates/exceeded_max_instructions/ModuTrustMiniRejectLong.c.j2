@@ -1,0 +1,72 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+static inline void init_buffers(uint8_t *buf, uint8_t *iv, uint8_t *tag, uint32_t size) {
+    for (uint32_t i = 0; i < size; ++i)
+        buf[i] = (uint8_t)(i & 0xFF);
+    for (uint32_t i = 0; i < 12; ++i)
+        iv[i] = (uint8_t)(0xA5 + i);
+    for (uint32_t i = 0; i < 16; ++i)
+        tag[i] = 0;
+    memxor(buf, iv, (12 < size) ? 12 : size);
+}
+
+static inline void overload_compute(uint8_t *buf, uint8_t *iv, uint8_t *tag,
+                                    uint32_t outer, uint32_t mid, uint32_t inner,
+                                    uint64_t *acc) {
+    for (uint32_t i = 0; i < outer; ++i) {
+        for (uint32_t j = 0; j < mid; ++j) {
+#pragma unroll
+            for (uint32_t k = 0; k < inner; ++k) {
+                uint32_t idx = (i + j + k) & 0x7F;
+                buf[idx] ^= (uint8_t)((i * j + k) & 0xFF);
+                *acc += buf[idx] + iv[(i + j) % 12];
+                *acc ^= tag[k % 16] + (i ^ j ^ k);
+
+{% if PATTERN_VARIANT == 0 %}
+                if (((i + j + k) & 0x3F) == 0) {
+                    memxor(buf, iv, 12);
+                    memcpy(tag, buf, 16);
+                }
+{% else %}
+                if (((i + j + k) & 0x3F) == 0) {
+                    int cmpv = memcmp(buf, iv, 12);
+                    memset(tag, (uint8_t)cmpv, 16);
+                }
+{% endif %}
+            }
+        }
+    }
+}
+
+static inline uint32_t finalize(uint8_t *iv, uint8_t *tag) {
+    uint8_t tmp[32] = {0};
+    memcpy(tmp, iv, 12);
+    memxor(tmp, tag, 16);
+    uint32_t s = 0;
+    for (uint32_t i = 0; i < 32; ++i)
+        s += tmp[i];
+    return s;
+}
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t buf[128];
+    uint8_t iv[12];
+    uint8_t tag[16];
+
+    char fmt_d[3] = {'%','d',0};
+
+    init_buffers(buf, iv, tag, sizeof(buf));
+
+    uint64_t acc = 0;
+
+    overload_compute(buf, iv, tag, {{ LOOP_OUTER }}, {{ LOOP_MID }}, {{ LOOP_INNER }}, &acc);
+
+    uint32_t sum = finalize(iv, tag);
+
+    TRUSTED_CALL_VOID(mini_printf, fmt_d, (uint64_t)(acc + sum));
+
+    ENTRY_POINT_END();
+}

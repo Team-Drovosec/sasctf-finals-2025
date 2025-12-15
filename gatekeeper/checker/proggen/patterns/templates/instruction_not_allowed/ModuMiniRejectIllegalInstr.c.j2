@@ -1,0 +1,94 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+static inline void fill_buffers(uint8_t *a, uint8_t *b, uint32_t size, int *illegal_inserted) {
+#pragma unroll
+    for (uint32_t i = 0; i < size; ++i) {
+        a[i] = (uint8_t)(i & 0xFF);
+        b[i] = (uint8_t)((i * 3 + 1) & 0xFF);
+
+        if (((( {{ seed }} ) + i) % 5) == 0) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            *illegal_inserted = 1;
+        }
+    }
+
+    if ((({{ seed }}) % 4) == 0) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        *illegal_inserted = 1;
+    }
+}
+
+static inline uint64_t combine_xor(uint8_t *a, uint8_t *b, uint8_t *out, uint32_t size, int *illegal_inserted) {
+    memcpy(out, a, size);
+    memxor(out, b, size);
+
+    if ((({{ seed }}) % 6) == 2) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        *illegal_inserted = 1;
+    }
+
+    uint64_t acc = 0;
+#pragma unroll
+    for (uint32_t i = 0; i < size; ++i) {
+        acc += out[i];
+        if (((( {{ seed }} ) + i) % 7) == 3) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            *illegal_inserted = 1;
+        }
+    }
+    return acc;
+}
+
+static inline uint64_t compare_and_encode(uint8_t *a, uint8_t *b, uint32_t size, int *illegal_inserted) {
+    int cmpv = memcmp(a, b, size);
+    memset(a, (uint8_t)cmpv, size);
+
+    if ((({{ seed }}) % 3) == 1) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        *illegal_inserted = 1;
+    }
+
+    char tmp_hex[2 * 16 + 1];
+    hex_encode(a, 16, tmp_hex, 0);
+
+    uint64_t acc = 0;
+    for (int i = 0; i < 16; ++i) {
+        acc += (uint8_t)tmp_hex[i];
+
+        if (((( {{ seed }} ) + i) % 8) == 4) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            *illegal_inserted = 1;
+        }
+    }
+    return acc;
+}
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t a[{{ FILE_SIZE }}];
+    uint8_t b[{{ FILE_SIZE }}];
+    uint8_t out[{{ FILE_SIZE }}];
+
+    int illegal_inserted = 0;
+
+    fill_buffers(a, b, {{ FILE_SIZE }}, &illegal_inserted);
+    uint64_t s1 = combine_xor(a, b, out, {{ FILE_SIZE }}, &illegal_inserted);
+    uint64_t s2 = compare_and_encode(a, b, {{ FILE_SIZE }}, &illegal_inserted);
+
+    if ((({{ seed }}) % 11) == 5) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        illegal_inserted = 1;
+    }
+
+    if (!illegal_inserted) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        illegal_inserted = 1;
+    }
+
+    volatile uint64_t final_val = s1 + s2;
+    (void)final_val;
+
+    ENTRY_POINT_END();
+}

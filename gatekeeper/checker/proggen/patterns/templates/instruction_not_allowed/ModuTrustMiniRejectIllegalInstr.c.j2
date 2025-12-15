@@ -1,0 +1,113 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+static inline void init_buffers(uint8_t *buf_plain, uint8_t *iv, uint8_t *tag, uint32_t size, int *illegal_inserted) {
+    for (uint32_t i = 0; i < size; ++i)
+        buf_plain[i] = (uint8_t)(i & 0xFF);
+    memset(iv, 0xA5, 12);
+    memset(tag, 0, 16);
+    memxor(buf_plain, iv, (12 < size) ? 12 : size);
+
+    if ((({{ seed }}) % 4) == 0) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        *illegal_inserted = 1;
+    }
+}
+
+static inline void create_plain_files(uint8_t *buf_plain, uint64_t *handles, uint32_t file_size, int count,
+                                      const char *fmt_handle, uint64_t *acc, int *illegal_inserted) {
+#pragma unroll
+    for (int i = 0; i < count; ++i) {
+        uint64_t h = TRUSTED_CALL(create_file_plain, buf_plain, file_size);
+        handles[i] = h;
+        *acc += h;
+
+        if (((( {{ seed }} ) + i) % 5) == 0) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            *illegal_inserted = 1;
+        }
+
+        TRUSTED_CALL_VOID(mini_printf, fmt_handle, h);
+    }
+
+    if ((({{ seed }}) % 3) == 1) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        *illegal_inserted = 1;
+    }
+}
+
+static inline void read_plain_files(uint64_t *handles, uint32_t file_size, int count,
+                                    const char *fmt_ret, uint64_t *acc_r, uint64_t *acc_l,
+                                    int *illegal_inserted) {
+#pragma unroll
+    for (int p = 0; p < count; ++p) {
+        uint8_t outbuf[{{ FILE_SIZE }} + 4];
+        uint32_t outlen = file_size;
+        int32_t r = TRUSTED_CALL(read_file_plain, handles[p], outbuf, &outlen);
+        *acc_r += (uint64_t)r;
+        *acc_l += (uint64_t)outlen;
+
+        if (((( {{ seed }} ) + p) % 6) == 2) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            *illegal_inserted = 1;
+        }
+    }
+}
+
+static inline uint32_t postprocess(uint8_t *iv, uint8_t *tag, int *illegal_inserted) {
+    uint8_t tmp[32] = { 0 };
+    size_t copy_len = (sizeof(tmp) < 12) ? sizeof(tmp) : 12;
+    memcpy(tmp, iv, copy_len);
+    size_t xor_len = (sizeof(tag) < sizeof(tmp)) ? sizeof(tag) : sizeof(tmp);
+    memxor(tmp, tag, xor_len);
+
+    if ((({{ seed }}) % 7) == 3) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        *illegal_inserted = 1;
+    }
+
+    uint32_t sum = 0;
+    for (size_t i = 0; i < sizeof(tmp); ++i) sum += tmp[i];
+    return sum;
+}
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t buf_plain[{{ FILE_SIZE }}];
+    uint8_t iv[12];
+    uint8_t tag[16];
+    uint64_t handles_plain[{{ COUNT_PLAIN }}];
+
+{% if FORMAT_CASE == 0 %}
+    char fmt_handle[5] = {'%','l','l','x',0};
+    char fmt_ret[3]    = {'%','d',0};
+{% else %}
+    char fmt_handle[3] = {'%','d',0};
+    char fmt_ret[5]    = {'%','l','l','x',0};
+{% endif %}
+
+    uint64_t acc_h = 0, acc_r = 0, acc_l = 0;
+    int illegal_inserted = 0;
+
+    init_buffers(buf_plain, iv, tag, {{ FILE_SIZE }}, &illegal_inserted);
+    create_plain_files(buf_plain, handles_plain, {{ FILE_SIZE }}, {{ COUNT_PLAIN }}, fmt_handle, &acc_h, &illegal_inserted);
+    read_plain_files(handles_plain, {{ FILE_SIZE }}, {{ COUNT_PLAIN }}, fmt_ret, &acc_r, &acc_l, &illegal_inserted);
+    uint32_t sum = postprocess(iv, tag, &illegal_inserted);
+
+    if ((({{ seed }}) % 11) == 5) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        illegal_inserted = 1;
+    }
+
+    if (!illegal_inserted) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        illegal_inserted = 1;
+    }
+
+    TRUSTED_CALL_VOID(mini_printf, fmt_ret, acc_h);
+    TRUSTED_CALL_VOID(mini_printf, fmt_ret, acc_r);
+    TRUSTED_CALL_VOID(mini_printf, fmt_ret, (uint64_t)sum);
+
+    ENTRY_POINT_END();
+}

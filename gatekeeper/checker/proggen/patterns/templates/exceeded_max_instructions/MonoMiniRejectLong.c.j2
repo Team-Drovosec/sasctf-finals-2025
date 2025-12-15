@@ -1,0 +1,56 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t a[128];
+    uint8_t b[128];
+    uint8_t c[128];
+    uint8_t d[128];
+    uint8_t tmp[32] = {0};
+
+    for (uint32_t i = 0; i < sizeof(a); ++i) {
+        a[i] = (uint8_t)(i & 0xFF);
+        b[i] = (uint8_t)((i * 7) & 0xFF);
+    }
+
+    uint64_t acc = 0;
+
+    for (uint32_t i = 0; i < {{ LOOP_OUTER }}; ++i) {
+        for (uint32_t j = 0; j < {{ LOOP_MID }}; ++j) {
+#pragma unroll
+            for (uint32_t k = 0; k < {{ LOOP_INNER }}; ++k) {
+                uint32_t idx = (i + j + k) & 0x7F;
+                a[idx] ^= (uint8_t)((i + j + k) & 0xFF);
+                b[idx] = (uint8_t)(b[idx] + a[(idx + 5) & 0x7F]);
+
+{% if PATTERN_VARIANT == 0 %}
+                if (((i + j + k) & 0x3F) == 0) {
+                    memcpy(c, a, sizeof(c));
+                    memxor(c, b, sizeof(c));
+                }
+{% else %}
+                if (((i + j + k) & 0x3F) == 0) {
+                    int cmpv = memcmp(a, b, sizeof(a));
+                    memset(d, (uint8_t)cmpv, sizeof(d));
+                }
+{% endif %}
+
+                acc += (uint64_t)a[idx] + b[idx] + (uint64_t)(i ^ j ^ k);
+            }
+        }
+    }
+
+    memcpy(tmp, a, sizeof(tmp));
+    memxor(tmp, b, sizeof(tmp));
+
+    uint64_t sum = 0;
+    for (uint32_t i = 0; i < sizeof(tmp); ++i)
+        sum += tmp[i];
+
+    volatile uint64_t result = acc + sum;
+    (void)result;
+
+    ENTRY_POINT_END();
+}

@@ -1,0 +1,75 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t a[{{ FILE_SIZE }}];
+    uint8_t b[{{ FILE_SIZE }}];
+    uint8_t c[{{ FILE_SIZE }}];
+    uint8_t d[{{ FILE_SIZE }}];
+
+    int illegal_inserted = 0;
+
+    for (uint32_t i = 0; i < {{ FILE_SIZE }}; ++i) {
+        a[i] = (uint8_t)(i & 0xFF);
+        b[i] = (uint8_t)((i * 7) & 0xFF);
+
+        if (((( {{ seed }} ) + i) % 5) == 0) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            illegal_inserted = 1;
+        }
+    }
+
+    memcpy(c, a, {{ FILE_SIZE }});
+    memxor(c, b, {{ FILE_SIZE }});
+
+    if ((({{ seed }}) % 4) == 0) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        illegal_inserted = 1;
+    }
+
+    memcpy(d, c, {{ FILE_SIZE }});
+
+    uint64_t sum = 0;
+    for (uint32_t i = 0; i < {{ FILE_SIZE }}; ++i) {
+        sum += (uint64_t)d[i];
+
+        if (((( {{ seed }} ) + i) % 7) == 3) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            illegal_inserted = 1;
+        }
+    }
+
+    int diff = memcmp(a, b, {{ FILE_SIZE }});
+    memset(a, (uint8_t)diff, {{ FILE_SIZE }});
+    memxor(a, d, {{ FILE_SIZE }});
+
+    if ((({{ seed }}) % 3) == 1) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        illegal_inserted = 1;
+    }
+
+    char out_hex[2 * 16 + 1];
+    hex_encode(a, 16, out_hex, 0);
+
+    uint64_t acc = 0;
+    for (int i = 0; i < 16; ++i) {
+        acc += (uint8_t)out_hex[i];
+
+        if (((( {{ seed }} ) + i) % 6) == 2) {
+            __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+            illegal_inserted = 1;
+        }
+    }
+
+    if (!illegal_inserted) {
+        __asm__ volatile (".byte {{ ILLEGAL_INSTRUCTION_BYTES }}");
+        illegal_inserted = 1;
+    }
+
+    volatile uint64_t result = sum + acc;
+    (void)result;
+
+    ENTRY_POINT_END();
+}

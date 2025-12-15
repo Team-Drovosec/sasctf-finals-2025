@@ -1,0 +1,98 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "trusted_lib_api.h"
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t buf_plain[{{ FILE_SIZE }}];
+    uint8_t iv[12];
+    uint8_t tag[16];
+
+    for (uint32_t i = 0; i < {{ FILE_SIZE }}; ++i)
+        buf_plain[i] = (uint8_t)(i ^ ({{ seed }} & 0xFF));
+    for (uint32_t i = 0; i < 12; ++i)
+        iv[i] = (uint8_t)(0xA5 + i + ({{ seed }} & 3));
+    for (uint32_t i = 0; i < 16; ++i)
+        tag[i] = (uint8_t)(i * ({{ seed % 5 }} + 1));
+
+    uint64_t handles_plain[{{ COUNT_PLAIN }}];
+    uint64_t handles_enc[{{ COUNT_ENC }}];
+    uint64_t acc_h = 0, acc_r = 0, acc_l = 0;
+
+{% if FORMAT_CASE == 0 %}
+    char fmt_handle[5] = {'%','l','l','x',0};
+    char fmt_ret[3] = {'%','d',0};
+{% else %}
+    char fmt_handle[3] = {'%','d',0};
+    char fmt_ret[5] = {'%','l','l','x',0};
+{% endif %}
+
+    uint64_t sym_h = TRUSTED_CALL(create_file_plain, buf_plain, (uint32_t){{ FILE_SIZE }});
+    handles_plain[0] = sym_h;
+    acc_h += sym_h;
+
+    if (sym_h & 1ULL) {
+        uint64_t e = TRUSTED_CALL(create_file_enc, buf_plain, (uint32_t){{ FILE_SIZE }}, (uint32_t*)iv, (uint32_t*)tag);
+        handles_enc[0] = e;
+        acc_h += e;
+    } else {
+        uint64_t e2 = TRUSTED_CALL(create_file_enc, buf_plain, (uint32_t){{ FILE_SIZE }}, (uint32_t*)iv, (uint32_t*)tag);
+        handles_enc[0] = e2 ^ sym_h;
+        acc_h += e2;
+    }
+
+#pragma unroll
+    for (int i = 1; i < {{ COUNT_PLAIN }}; ++i) {
+        uint64_t h = TRUSTED_CALL(create_file_plain, buf_plain, (uint32_t){{ FILE_SIZE }});
+        handles_plain[i] = h;
+        acc_h += h;
+    }
+
+#pragma unroll
+    for (int j = 1; j < {{ COUNT_ENC }}; ++j) {
+        uint64_t h = TRUSTED_CALL(create_file_enc, buf_plain, (uint32_t){{ FILE_SIZE }}, (uint32_t*)iv, (uint32_t*)tag);
+        handles_enc[j] = h;
+        acc_h += h;
+    }
+
+#pragma unroll
+    for (int p = 0; p < {{ COUNT_PLAIN }}; ++p) {
+        uint8_t outbuf[{{ FILE_SIZE }}];
+        uint32_t outlen = {{ FILE_SIZE }};
+        int32_t r = TRUSTED_CALL(read_file_plain, handles_plain[p], outbuf, &outlen);
+        acc_r += (uint64_t)r;
+        acc_l += (uint64_t)outlen;
+
+        if ((r ^ sym_h) & (1ULL << ({{ seed % 5 }}))) {
+            tag[p % 16] ^= (uint8_t)(r & 0xFF);
+        } else {
+            iv[p % 12] ^= (uint8_t)((r + p) & 0xFF);
+        }
+    }
+
+#pragma unroll
+    for (int q = 0; q < {{ COUNT_ENC }}; ++q) {
+        uint8_t outbuf[{{ FILE_SIZE }}];
+        uint32_t outlen = {{ FILE_SIZE }};
+        int32_t r = TRUSTED_CALL(read_file_enc, handles_enc[q], (uint32_t*)tag, outbuf, &outlen);
+        acc_r += (uint64_t)r;
+        acc_l += (uint64_t)outlen;
+    }
+
+    uint8_t tmp[16];
+    for (int i = 0; i < 16; ++i)
+        tmp[i] = (uint8_t)(iv[i % 12] ^ tag[i]);
+
+    uint64_t checksum = 0;
+    for (int i = 0; i < 16; ++i)
+        checksum += tmp[i];
+
+    if ((checksum ^ sym_h) & 0x10ULL) {
+        TRUSTED_CALL_VOID(mini_printf, fmt_ret, acc_h + acc_r);
+    } else {
+        TRUSTED_CALL_VOID(mini_printf, fmt_ret, acc_h - acc_r);
+    }
+
+    TRUSTED_CALL_VOID(mini_printf, fmt_ret, checksum);
+
+    ENTRY_POINT_END();
+}

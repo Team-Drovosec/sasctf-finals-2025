@@ -1,0 +1,66 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t a[{{ FILE_SIZE }}];
+    uint8_t b[{{ FILE_SIZE }}];
+    uint8_t c[{{ FILE_SIZE }}];
+    uint8_t d[{{ FILE_SIZE }}];
+
+    for (uint32_t i = 0; i < {{ FILE_SIZE }}; ++i) {
+        a[i] = (uint8_t)(i & 0xFF);
+        b[i] = (uint8_t)((i * 7) & 0xFF);
+    }
+
+    memcpy(c, a, {{ FILE_SIZE }});
+    memxor(c, b, {{ FILE_SIZE }});
+    memcpy(d, c, {{ FILE_SIZE }});
+
+    uint64_t sum = 0;
+    for (uint32_t i = 0; i < {{ FILE_SIZE }}; ++i) {
+        sum += (uint64_t)d[i];
+    }
+
+    int diff = memcmp(a, b, {{ FILE_SIZE }});
+    memset(a, (uint8_t)diff, {{ FILE_SIZE }});
+    memxor(a, d, {{ FILE_SIZE }});
+
+    char out_hex[2 * 16 + 1];
+    hex_encode(a, 16, out_hex, 0);
+
+    uint64_t acc = 0;
+    for (int i = 0; i < 16; ++i) acc += (uint8_t)out_hex[i];
+
+    /*************************************************************************/
+{% if TAINT_KIND == 0 %}
+    uint8_t tainted_buf[{{ TAINT_SIZE }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < sizeof(tainted_buf); ++t) {
+        tainted_acc += tainted_buf[t];
+    }
+{% elif TAINT_KIND == 1 %}
+    uint32_t tainted_buf32[{{ TAINT_SIZE_WORDS }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < {{ TAINT_SIZE_WORDS }}; ++t) {
+        tainted_acc += (uint64_t)tainted_buf32[t];
+    }
+{% else %}
+    uint64_t tainted_buf64[{{ TAINT_SIZE_QWORDS }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < {{ TAINT_SIZE_QWORDS }}; ++t) {
+        tainted_acc += tainted_buf64[t];
+    }
+{% endif %}
+    acc += tainted_acc;
+    /*************************************************************************/
+
+    volatile uint64_t result = sum + acc;
+    (void)result;
+
+    ENTRY_POINT_END();
+}

@@ -1,0 +1,19 @@
+# custom gitignore
+build/*
+main.o
+**/.pytest_cache
+compile_commands.json
+out.prof
+
+service/example_program/build
+sources/executor/trusted_lib/build/
+
+checker/generated_programs
+sources/verifier/keys
+
+service/executor/qemu-system-riscv64
+
+exploit/qemu-escape-shellcode.elf
+exploit/qemu-escape-shellcode.bin
+
+.gdb_history

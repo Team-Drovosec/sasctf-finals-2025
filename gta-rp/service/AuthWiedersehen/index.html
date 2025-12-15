@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTARP Registration</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="text"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .user-class-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+
+        .user-class-option {
+            flex: 1;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            background: white;
+        }
+
+        .user-class-option:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .user-class-option.selected {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        .user-class-option h3 {
+            margin-bottom: 5px;
+            font-size: 1.1rem;
+        }
+
+        .user-class-option p {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .register-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            margin-top: 20px;
+        }
+
+        .register-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .register-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border: 1px solid #fcc;
+        }
+
+        .success-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .qr-container {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            margin: 20px 0;
+        }
+
+        .qr-code {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+        }
+
+        .warning-box {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            font-weight: 600;
+        }
+
+        .warning-icon {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+
+        .user-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .user-info h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .user-info p {
+            margin: 5px 0;
+            color: #666;
+        }
+
+        .loading {
+            display: none;
+            margin-top: 20px;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="logo">GTARP</div>
+        <div class="subtitle">Gold, Tools and Armor Roleplay Registration</div>
+
+        <form id="registrationForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required placeholder="Enter your username">
+            </div>
+
+            <div class="form-group">
+                <label>Choose Your Class</label>
+                <div class="user-class-group">
+                    <div class="user-class-option" data-class="miner">
+                        <h3>⛏️ Miner</h3>
+                        <p>Extract resources and earn money</p>
+                    </div>
+                    <div class="user-class-option" data-class="businessman">
+                        <h3>💼 Businessman</h3>
+                        <p>Manage your mine and workers</p>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="register-btn" id="registerBtn">
+                Register Account
+            </button>
+
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Creating your account...</p>
+            </div>
+        </form>
+
+        <div id="errorMessage" class="error-message" style="display: none;"></div>
+
+        <div id="successSection" class="success-section">
+            <div class="user-info" id="userInfo"></div>
+
+            <div class="qr-container">
+                <h3>🔐 Authenticator Setup</h3>
+                <p>Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
+                <div id="qrcode" class="qr-code"></div>
+            </div>
+
+            <div class="warning-box">
+                <div class="warning-icon">⚠️</div>
+                <strong>Important:</strong> This QR code will only be shown once! Make sure to save it to your
+                authenticator app before closing this page. You will need the authenticator code to log into the game.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedClass = null;
+
+        document.querySelectorAll('.user-class-option').forEach(option => {
+            option.addEventListener('click', function () {
+                document.querySelectorAll('.user-class-option').forEach(opt => opt.classList.remove('selected'));
+                this.classList.add('selected');
+                selectedClass = this.dataset.class;
+            });
+        });
+
+        document.getElementById('registrationForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const registerBtn = document.getElementById('registerBtn');
+            const loading = document.getElementById('loading');
+            const errorMessage = document.getElementById('errorMessage');
+
+            if (!username) {
+                showError('Please enter a username');
+                return;
+            }
+
+            if (!selectedClass) {
+                showError('Please select a user class');
+                return;
+            }
+
+            registerBtn.disabled = true;
+            loading.style.display = 'block';
+            errorMessage.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/v1/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        userClass: selectedClass
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showSuccess(data);
+                } else {
+                    showError(data.errorMessage || 'Registration failed');
+                }
+            } catch (error) {
+                showError('Unknown error. Please try again.');
+            } finally {
+                registerBtn.disabled = false;
+                loading.style.display = 'none';
+            }
+        });
+
+        function showError(message) {
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+
+        function showSuccess(responseData) {
+            document.getElementById('registrationForm').style.display = 'none';
+
+            const userInfo = document.getElementById('userInfo');
+            userInfo.innerHTML = `
+                <h3>✅ Registration Successful!</h3>
+                <p><strong>OTP Secret:</strong> ${responseData.otpSecret}</p>
+            `;
+
+            generateQRCode(document.getElementById('username').value.trim(), responseData.otpSecret);
+
+            document.getElementById('successSection').style.display = 'block';
+        }
+
+        function generateQRCode(username, otpSecret) {
+            const issuer = 'GTARP';
+            const totpUri = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(username)}?secret=${otpSecret}&issuer=${encodeURIComponent(issuer)}&digits=8`;
+
+            const qrCodeDiv = document.getElementById('qrcode');
+            qrCodeDiv.innerHTML = '';
+
+            new QRCode(document.getElementById("qrcode"), totpUri);
+        }
+    </script>
+</body>
+
+</html>

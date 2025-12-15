@@ -1,0 +1,98 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+static inline void init_buffers(uint8_t *buf_plain, uint8_t *iv, uint8_t *tag, uint32_t size) {
+    for (uint32_t i = 0; i < size; ++i) buf_plain[i] = (uint8_t)(i & 0xFF);
+    memset(iv, 0xA5, 12);
+    memset(tag, 0, 16);
+    memxor(buf_plain, iv, (12 < size) ? 12 : size);
+}
+
+static inline void create_plain_files(uint8_t *buf_plain, uint64_t *handles, uint32_t file_size, int count, const char *fmt_handle, uint64_t *acc) {
+#pragma unroll
+    for (int i = 0; i < count; ++i) {
+        uint64_t h = TRUSTED_CALL(create_file_plain, buf_plain, file_size);
+        handles[i] = h;
+        *acc += h;
+        TRUSTED_CALL_VOID(mini_printf, fmt_handle, h);
+    }
+}
+
+static inline void read_plain_files(uint64_t *handles, uint32_t file_size, int count, const char *fmt_ret, uint64_t *acc_r, uint64_t *acc_l) {
+#pragma unroll
+    for (int p = 0; p < count; ++p) {
+        uint8_t outbuf[file_size + 4];
+        uint32_t outlen = file_size;
+        int32_t r = TRUSTED_CALL(read_file_plain, handles[p], outbuf, &outlen);
+        *acc_r += (uint64_t)r;
+        *acc_l += (uint64_t)outlen;
+    }
+}
+
+static inline uint32_t postprocess(uint8_t *iv, uint8_t *tag) {
+    uint8_t tmp[32] = { 0 };
+    size_t copy_len = (sizeof(tmp) < 12) ? sizeof(tmp) : 12;
+    memcpy(tmp, iv, copy_len);
+    size_t xor_len = (sizeof(tag) < sizeof(tmp)) ? sizeof(tag) : sizeof(tmp);
+    memxor(tmp, tag, xor_len);
+    uint32_t sum = 0;
+    for (size_t i = 0; i < sizeof(tmp); ++i) sum += tmp[i];
+    return sum;
+}
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t buf_plain[{{ FILE_SIZE }}];
+    uint8_t iv[12];
+    uint8_t tag[16];
+    uint64_t handles_plain[{{ COUNT_PLAIN }}];
+
+{% if FORMAT_CASE == 0 %}
+    char fmt_handle[5]; fmt_handle[0]='%'; fmt_handle[1]='l'; fmt_handle[2]='l'; fmt_handle[3]='x'; fmt_handle[4]=0;
+    char fmt_ret[3]; fmt_ret[0]='%'; fmt_ret[1]='d'; fmt_ret[2]=0;
+{% else %}
+    char fmt_handle[3]; fmt_handle[0]='%'; fmt_handle[1]='d'; fmt_handle[2]=0;
+    char fmt_ret[5]; fmt_ret[0]='%'; fmt_ret[1]='l'; fmt_ret[2]='l'; fmt_ret[3]='x'; fmt_ret[4]=0;
+{% endif %}
+
+    uint64_t acc_h = 0, acc_r = 0, acc_l = 0;
+
+    init_buffers(buf_plain, iv, tag, {{ FILE_SIZE }});
+    create_plain_files(buf_plain, handles_plain, {{ FILE_SIZE }}, {{ COUNT_PLAIN }}, fmt_handle, &acc_h);
+    read_plain_files(handles_plain, {{ FILE_SIZE }}, {{ COUNT_PLAIN }}, fmt_ret, &acc_r, &acc_l);
+
+    /*************************************************************************/
+{% if TAINT_KIND == 0 %}
+    uint8_t tainted_buf[{{ TAINT_SIZE }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < sizeof(tainted_buf); ++t) {
+        tainted_acc += tainted_buf[t];
+    }
+{% elif TAINT_KIND == 1 %}
+    uint32_t tainted_buf32[{{ TAINT_SIZE_WORDS }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < {{ TAINT_SIZE_WORDS }}; ++t) {
+        tainted_acc += (uint64_t)tainted_buf32[t];
+    }
+{% else %}
+    uint64_t tainted_buf64[{{ TAINT_SIZE_QWORDS }}];
+    uint64_t tainted_acc = 0;
+#pragma unroll
+    for (size_t t = 0; t < {{ TAINT_SIZE_QWORDS }}; ++t) {
+        tainted_acc += tainted_buf64[t];
+    }
+{% endif %}
+    acc_r += tainted_acc;
+    /*************************************************************************/
+
+    uint32_t sum = postprocess(iv, tag);
+
+    TRUSTED_CALL_VOID(mini_printf, fmt_ret, acc_h);
+    TRUSTED_CALL_VOID(mini_printf, fmt_ret, acc_r);
+    TRUSTED_CALL_VOID(mini_printf, fmt_ret, (uint64_t)sum);
+
+    ENTRY_POINT_END();
+}

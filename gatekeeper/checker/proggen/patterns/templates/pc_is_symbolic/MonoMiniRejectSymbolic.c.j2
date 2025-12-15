@@ -1,0 +1,59 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t a[{{ FILE_SIZE }}];
+    uint8_t b[{{ FILE_SIZE }}];
+    uint8_t c[{{ FILE_SIZE }}];
+    uint8_t d[{{ FILE_SIZE }}];
+    uint8_t iv[12];
+    uint8_t tag[16];
+
+    for (uint32_t i = 0; i < {{ FILE_SIZE }}; ++i) {
+        a[i] = (uint8_t)(i & 0xFF);
+        b[i] = (uint8_t)((i * 7 + {{ seed % 5 }}) & 0xFF);
+    }
+
+    memset(iv, 0xA5, sizeof(iv));
+    memset(tag, 0, sizeof(tag));
+
+    memcpy(c, a, {{ FILE_SIZE }});
+    memxor(c, b, {{ FILE_SIZE }});
+    memcpy(d, c, {{ FILE_SIZE }});
+
+    uint64_t sym_handle = TRUSTED_CALL(create_file_plain, a, (uint32_t){{ FILE_SIZE }});
+
+    if (sym_handle & 1ULL) {
+        for (uint32_t i = 0; i < {{ FILE_SIZE }}; ++i)
+            c[i] ^= (uint8_t)((sym_handle + i) & 0xFF);
+    } else {
+        for (uint32_t i = 0; i < {{ FILE_SIZE }}; ++i)
+            d[i] ^= (uint8_t)((sym_handle - i) & 0xFF);
+    }
+
+    uint64_t sum = 0;
+    for (uint32_t i = 0; i < {{ FILE_SIZE }}; ++i)
+        sum += (uint64_t)(c[i] ^ d[i]);
+
+    memset(a, (uint8_t)sum, {{ FILE_SIZE }});
+    memxor(a, d, {{ FILE_SIZE }});
+
+    if ((sym_handle ^ sum) & 0x10ULL)
+        memxor(b, a, {{ FILE_SIZE }});
+    else
+        memcpy(b, a, {{ FILE_SIZE }});
+
+    char out_hex[2 * 16 + 1];
+    hex_encode(b, 16, out_hex, 0);
+
+    uint64_t acc = 0;
+    for (int i = 0; i < 16; ++i)
+        acc += (uint8_t)out_hex[i];
+
+    volatile uint64_t result = acc + sum + sym_handle;
+    (void)result;
+
+    ENTRY_POINT_END();
+}

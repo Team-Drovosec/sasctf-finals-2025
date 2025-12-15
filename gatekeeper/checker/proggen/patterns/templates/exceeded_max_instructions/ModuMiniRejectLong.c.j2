@@ -1,0 +1,80 @@
+// AUTOGEN: pattern={{ pattern_name }} seed={{ seed }}
+#include <stdint.h>
+#include "ministd.h"
+#include "trusted_lib_api.h"
+
+static inline void fill_buffers(uint8_t *a, uint8_t *b, uint32_t size) {
+#pragma unroll
+    for (uint32_t i = 0; i < size; ++i) {
+        a[i] = (uint8_t)(i & 0xFF);
+        b[i] = (uint8_t)((i * 3 + 1) & 0xFF);
+    }
+}
+
+static inline uint64_t heavy_compute(uint8_t *a, uint8_t *b, uint8_t *out,
+                                     uint32_t size,
+                                     uint32_t loop_outer,
+                                     uint32_t loop_mid,
+                                     uint32_t loop_inner) {
+    uint64_t acc = 0;
+
+    for (uint32_t i = 0; i < loop_outer; ++i) {
+        for (uint32_t j = 0; j < loop_mid; ++j) {
+#pragma unroll
+            for (uint32_t k = 0; k < loop_inner; ++k) {
+                uint32_t idx = (i + j + k) % size;
+                a[idx] ^= (uint8_t)((i * 7 + j + k) & 0xFF);
+                b[idx] += (uint8_t)((i + k) & 0xFF);
+
+{% if PATTERN_VARIANT == 0 %}
+                if (((i + j + k) & 0x3F) == 0) {
+                    memcpy(out, a, size);
+                    memxor(out, b, size);
+                }
+{% else %}
+                if (((i + j + k) & 0x3F) == 0) {
+                    int cmpv = memcmp(a, b, size);
+                    memset(out, (uint8_t)cmpv, size);
+                }
+{% endif %}
+                acc += (uint64_t)(a[idx] + b[idx] + (i ^ j ^ k));
+            }
+        }
+    }
+
+    return acc;
+}
+
+static inline uint64_t finalize(uint8_t *a, uint8_t *b, uint32_t size) {
+    uint8_t tmp[32] = {0};
+    memcpy(tmp, a, (size < sizeof(tmp)) ? size : sizeof(tmp));
+    memxor(tmp, b, (size < sizeof(tmp)) ? size : sizeof(tmp));
+    uint64_t s = 0;
+#pragma unroll
+    for (uint32_t i = 0; i < sizeof(tmp); ++i)
+        s += tmp[i];
+    return s;
+}
+
+ENTRY_POINT_ATTR void start(void) {
+    uint8_t a[{{ FILE_SIZE }}];
+    uint8_t b[{{ FILE_SIZE }}];
+    uint8_t out[{{ FILE_SIZE }}];
+
+    fill_buffers(a, b, {{ FILE_SIZE }});
+
+    uint64_t acc = heavy_compute(
+        a, b, out,
+        {{ FILE_SIZE }},
+        {{ LOOP_OUTER }},
+        {{ LOOP_MID }},
+        {{ LOOP_INNER }}
+    );
+
+    uint64_t sum = finalize(a, b, {{ FILE_SIZE }});
+
+    volatile uint64_t final_val = acc + sum;
+    (void)final_val;
+
+    ENTRY_POINT_END();
+}
